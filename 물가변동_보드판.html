@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>HEC 물가지표 대시보드 & 시뮬레이터</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700;800&display=swap');
+        body { font-family: 'Pretendard', sans-serif; background-color: #f8fafc; padding-bottom: env(safe-area-inset-bottom, 0); }
+        .tab-btn.active { background-color: #0f172a; color: white; }
+        .glass-card { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); border: 1px solid rgba(226, 232, 240, 0.8); }
+        .hidden { display: none !important; }
+        .safe-area-x { padding-left: max(1rem, env(safe-area-inset-left, 0)); padding-right: max(1rem, env(safe-area-inset-right, 0)); }
+        .safe-area-top { padding-top: max(0.75rem, env(safe-area-inset-top, 0)); }
+        .touch-target { min-height: 44px; }
+        .table-scroll-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .header-toolbar { -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+        .header-toolbar::-webkit-scrollbar { display: none; }
+        .chart-container { height: 220px; }
+        .data-table-inner { min-width: 520px; }
+        html { overflow-x: hidden; }
+        input:not([type=checkbox]):not([type=radio]), select, textarea { font-size: 16px; }
+        @media (min-width: 640px) {
+            .chart-container { height: 260px; }
+            input:not([type=checkbox]):not([type=radio]), select, textarea { font-size: inherit; }
+        }
+        @media (min-width: 768px) {
+            .chart-container { height: 280px; }
+            .data-table-inner { min-width: 100%; }
+        }
+        @media (min-width: 1024px) {
+            .chart-container { height: 300px; }
+        }
+        
+        /* 커스텀 스크롤바 */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col text-slate-800">
+
+    <!-- 헤더 -->
+    <header class="bg-slate-900 text-white px-4 sm:px-6 py-3 sm:py-4 flex flex-wrap justify-between items-center shadow-lg border-b border-slate-800 safe-area-x safe-area-top">
+        <div class="flex items-center gap-3">
+            <span class="bg-blue-600 text-white text-xs font-extrabold px-3 py-1 rounded-md tracking-wider">HEC R&D</span>
+            <div>
+                <h1 class="text-base sm:text-lg font-bold tracking-tight">주요 지표 통합 모니터링 시스템</h1>
+                <p class="text-[10px] text-slate-400 m-0 hidden sm:block">Hyundai Engineering & Construction Cost Index Control Tower</p>
+            </div>
+        </div>
+        <div class="header-toolbar flex items-center gap-2 sm:gap-3 mt-3 sm:mt-0 flex-nowrap sm:flex-wrap w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+            <span id="connection-status" class="text-[10px] px-2.5 py-1.5 rounded-lg border flex items-center gap-1.5 text-slate-400 bg-slate-800/80 border-slate-700/50 touch-target">
+                <span class="w-1.5 h-1.5 rounded-full bg-current"></span>URL미설정
+            </span>
+            <button onclick="loadRemoteData(true)" title="수동 새로고침" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 transition-all touch-target">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">새로고침</span>
+            </button>
+            <button onclick="toggleDataConfig()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 transition-all touch-target">
+                <i data-lucide="settings" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">JSON 설정</span>
+            </button>
+            <span class="text-xs text-slate-400 bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700/50 flex items-center gap-1.5">
+                <i data-lucide="calendar" class="w-3.5 h-3.5 text-blue-400"></i>
+                <span class="hidden sm:inline">최종 개정일:</span>
+                <span id="last-revision-date" class="font-bold text-slate-200">2026-06-05</span>
+            </span>
+            <button id="admin-toggle-btn" onclick="toggleAdminMode()" class="bg-amber-600/95 hover:bg-amber-600 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 transition-all shadow-md touch-target shrink-0">
+                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+                <span id="admin-btn-text"><span class="sm:hidden">관리자</span><span class="hidden sm:inline">관리자 권한 인증</span></span>
+            </button>
+        </div>
+    </header>
+
+    <!-- JSON URL 미설정 안내 배너 -->
+    <div id="no-url-banner" class="hidden bg-amber-50 border-b border-amber-200 px-4 sm:px-6 safe-area-x">
+        <p class="text-xs text-amber-800 flex items-center gap-2 py-2.5">
+            <i data-lucide="info" class="w-4 h-4 shrink-0"></i>
+            <span>JSON 데이터 URL이 설정되지 않았습니다. 기본 샘플 데이터를 표시합니다. 헤더의 <strong>JSON 설정</strong>에서 SharePoint 공개 URL을 입력하세요.</span>
+        </p>
+    </div>
+
+    <!-- JSON 설정 패널 -->
+    <div id="data-config-panel" class="hidden bg-white border-b border-slate-200 px-4 sm:px-6 py-4 safe-area-x shadow-sm">
+        <div class="max-w-3xl mx-auto space-y-3">
+            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <i data-lucide="link" class="w-4 h-4 text-blue-500"></i> 원격 데이터 설정 (안2)
+            </h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="sm:col-span-2">
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1">JSON 데이터 URL (SharePoint 공개 링크 등)</label>
+                    <input type="url" id="config-json-url" placeholder="https://.../hec-data.json" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1">폴링 주기 (초)</label>
+                    <input type="number" id="config-poll-interval" min="10" max="3600" value="30" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                </div>
+                <div class="flex items-end gap-2">
+                    <button onclick="saveDataConfigFromUI()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl transition-colors touch-target">저장 및 적용</button>
+                    <button onclick="toggleDataConfig()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-4 py-2.5 rounded-xl transition-colors touch-target">닫기</button>
+                </div>
+            </div>
+            <p class="text-[10px] text-slate-400">일반 사용자는 읽기 전용으로 URL에서 데이터를 자동 갱신합니다. 관리자는 데이터 편집 후 <strong>공유용 JSON 보내기</strong>로 SharePoint에 업로드하세요.</p>
+        </div>
+    </div>
+
+    <!-- 내비게이션 탭 -->
+    <div class="bg-white border-b border-slate-200 px-4 sm:px-6 py-2 flex gap-2 overflow-x-auto safe-area-x">
+        <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn active px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 text-slate-600 hover:bg-slate-50 touch-target shrink-0">
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i><span class="sm:hidden">대시보드</span><span class="hidden sm:inline">실시간 대시보드</span>
+        </button>
+        <button onclick="switchTab('rawdata')" id="tab-rawdata" class="tab-btn hidden px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 text-slate-600 hover:bg-slate-50 touch-target shrink-0">
+            <i data-lucide="database" class="w-4 h-4"></i><span class="sm:hidden">RAW DATA</span><span class="hidden sm:inline">원시 데이터(RAW DATA) 관리실</span>
+        </button>
+        <button onclick="switchTab('guide')" id="tab-guide" class="tab-btn px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 text-slate-600 hover:bg-slate-50 touch-target shrink-0">
+            <i data-lucide="book-open" class="w-4 h-4"></i><span class="sm:hidden">가이드</span><span class="hidden sm:inline">지표 가이드 & 규정 해설</span>
+        </button>
+    </div>
+
+    <main class="flex-1 p-3 sm:p-4 md:p-6 max-w-7xl w-full mx-auto space-y-4 sm:space-y-6 safe-area-x">
+
+        <!-- TAB 1: 대시보드 화면 -->
+        <div id="content-dashboard" class="space-y-6">
+            
+            <!-- 지표 요약 대시보드 (카테고리형 요약 그리드 16가지) -->
+            <div class="space-y-4">
+                <!-- 01. 물가지수 -->
+                <div>
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                        <span class="w-1.5 h-3 bg-indigo-600 rounded-full inline-block"></span> 01. 물가지수
+                    </h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                        <div class="glass-card p-2.5 sm:p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[72px]">
+                            <span class="text-[9px] sm:text-[10px] font-bold text-slate-400 leading-tight">건설공사비지수(주거)</span>
+                            <div class="flex items-baseline justify-between mt-1 gap-1">
+                                <h4 class="text-sm sm:text-sm sm:text-base font-extrabold text-slate-900 truncate truncate" id="top-cci_house">-</h4>
+                                <span class="text-[9px] font-bold" id="pct-cci_house"></span>
+                            </div>
+                        </div>
+                        <div class="glass-card p-2.5 sm:p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[72px]">
+                            <span class="text-[10px] font-bold text-slate-400">건설공사비지수(비주거)</span>
+                            <div class="flex items-baseline justify-between mt-1">
+                                <h4 class="text-sm sm:text-base font-extrabold text-slate-900 truncate" id="top-cci_nonhouse">-</h4>
+                                <span class="text-[9px] font-bold" id="pct-cci_nonhouse"></span>
+                            </div>
+                        </div>
+                        <div class="glass-card p-2.5 sm:p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[72px]">
+                            <span class="text-[10px] font-bold text-slate-400">소비자물가지수</span>
+                            <div class="flex items-baseline justify-between mt-1">
+                                <h4 class="text-sm sm:text-base font-extrabold text-slate-900 truncate" id="top-cpi">-</h4>
+                                <span class="text-[9px] font-bold" id="pct-cpi"></span>
+                            </div>
+                        </div>
+                        <div class="glass-card p-2.5 sm:p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[72px]">
+                            <span class="text-[10px] font-bold text-slate-400">생산자물가지수</span>
+                            <div class="flex items-baseline justify-between mt-1">
+                                <h4 class="text-sm sm:text-base font-extrabold text-slate-900 truncate" id="top-ppi">-</h4>
+                                <span class="text-[9px] font-bold" id="pct-ppi"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 02. 주요 자재 -->
+                <div>
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                        <span class="w-1.5 h-3 bg-emerald-600 rounded-full inline-block"></span> 02. 주요 자재
+                    </h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                        <div class="glass-card p-2.5 sm:p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[72px]">
+                            <span class="text-[10px] font-bold text-slate-400">레미콘 25-30-15 <span class="text-[8px] text-slate-400 font-medium">(원/㎥)</span></span>
+                            <div class="flex items-baseline justify-between mt-1">
+                                <h4 class="text-sm sm:text-base font-extrabold text-slate-900 truncate" id="top-rmc">-</h4>
+                                <span class="text-[9px] font-bold" id="pct-rmc"></span>
+                            </div>
+                        </div>
+                        <div class="glass-card p-2.5 sm:p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[72px]">
+                            <span class="text-[10px] font-bold text-slate-400">철근 SD400 D10 <span class="text-[8px] text-slate-400 font-medium">(원/톤)</span></span>
+                            <div class="flex items-baseline justify-between mt-1">
+                                <h4 class="text-sm sm:text-base font-extrabold text-slate-900 truncate" id="top-st">-</h4>
+                                <span class="text-[9px] font-bold" id="pct-st"></span>
+                            </div>
+                        </div>
+                        <div class="glass-card p-2.5 sm:p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[72px]">
+                            <span class="text-[10px] font-bold text-slate-400">알루미늄 (LME 시세) <span class="text-[8px] text-slate-400 font-medium">($/t)</span></span>
+                            <div class="flex items-baseline justify-between mt-1">
+                                <h4 class="text-sm sm:text-base font-extrabold text-slate-900 truncate" id="top-lme_al">-</h4>
+                                <span class="text-[9px] font-bold" id="pct-lme_al"></span>
+                            </div>
+                        </div>
+                        <div class="glass-card p-2.5 sm:p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[72px]">
+                            <span class="text-[10px] font-bold text-slate-400">구리 (LME 시세) <span class="text-[8px] text-slate-400 font-medium">($/t)</span></span>
+                            <div class="flex items-baseline justify-between mt-1">
+                                <h4 class="text-sm sm:text-base font-extrabold text-slate-900 truncate" id="top-lme_cu">-</h4>
+                                <span class="text-[9px] font-bold" id="pct-lme_cu"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 03. 대외 정세 -->
+                <div>
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                        <span class="w-1.5 h-3 bg-amber-500 rounded-full inline-block"></span> 03. 대외 정세
+                    </h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                        <div class="glass-card p-2.5 sm:p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[72px]">
+                            <span class="text-[10px] font-bold text-slate-400">유가(브렌트유) <span class="text-[8px] text-slate-400 font-medium">($/B)</span></span>
+                            <div class="flex items-baseline justify-between mt-1">
+                                <h4 class="text-sm sm:text-base font-extrabold text-slate-900 truncate" id="top-oil_brent">-</h4>
+                                <span class="text-[9px] font-bold" id="pct-oil_brent"></span>
+                            </div>
+                        </div>
+                        <div class="glass-card p-2.5 sm:p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[72px]">
+                            <span class="text-[10px] font-bold text-slate-400">유가(두바이유) <span class="text-[8px] text-slate-400 font-medium">($/B)</span></span>
+                            <div class="flex items-baseline justify-between mt-1">
+                                <h4 class="text-sm sm:text-base font-extrabold text-slate-900 truncate" id="top-oil_dubai">-</h4>
+                                <span class="text-[9px] font-bold" id="pct-oil_dubai"></span>
+                            </div>
+                        </div>
+                        <div class="glass-card p-2.5 sm:p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[72px]">
+                            <span class="text-[10px] font-bold text-slate-400">환율 (원/달러)</span>
+                            <div class="flex items-baseline justify-between mt-1">
+                                <h4 class="text-sm sm:text-base font-extrabold text-slate-900 truncate" id="top-fx_usd">-</h4>
+                                <span class="text-[9px] font-bold" id="pct-fx_usd"></span>
+                            </div>
+                        </div>
+                        <div class="glass-card p-2.5 sm:p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[72px]">
+                            <span class="text-[10px] font-bold text-slate-400">환율 (원/유로)</span>
+                            <div class="flex items-baseline justify-between mt-1">
+                                <h4 class="text-sm sm:text-base font-extrabold text-slate-900 truncate" id="top-fx_eur">-</h4>
+                                <span class="text-[9px] font-bold" id="pct-fx_eur"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 04. 국가 고시 -->
+                <div>
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                        <span class="w-1.5 h-3 bg-rose-500 rounded-full inline-block"></span> 04. 국가 고시
+                    </h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                        <div class="glass-card p-2.5 sm:p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[72px]">
+                            <span class="text-[10px] font-bold text-slate-400">기본형 건축비(지상) <span class="text-[8px] text-slate-400 font-medium">(원/㎡)</span></span>
+                            <div class="flex items-baseline justify-between mt-1">
+                                <h4 class="text-sm sm:text-base font-extrabold text-slate-900 truncate" id="top-basic_ground">-</h4>
+                                <span class="text-[9px] font-bold" id="pct-basic_ground"></span>
+                            </div>
+                        </div>
+                        <div class="glass-card p-2.5 sm:p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[72px]">
+                            <span class="text-[10px] font-bold text-slate-400">기본형 건축비(지하) <span class="text-[8px] text-slate-400 font-medium">(원/㎡)</span></span>
+                            <div class="flex items-baseline justify-between mt-1">
+                                <h4 class="text-sm sm:text-base font-extrabold text-slate-900 truncate" id="top-basic_under">-</h4>
+                                <span class="text-[9px] font-bold" id="pct-basic_under"></span>
+                            </div>
+                        </div>
+                        <div class="glass-card p-2.5 sm:p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[72px]">
+                            <span class="text-[10px] font-bold text-slate-400">표준건축비 <span class="text-[8px] text-slate-400 font-medium">(원/㎡)</span></span>
+                            <div class="flex items-baseline justify-between mt-1">
+                                <h4 class="text-sm sm:text-base font-extrabold text-slate-900 truncate" id="top-standard_cost">-</h4>
+                                <span class="text-[9px] font-bold" id="pct-standard_cost"></span>
+                            </div>
+                        </div>
+                        <div class="glass-card p-2.5 sm:p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[72px]">
+                            <span class="text-[10px] font-bold text-slate-400">노임단가(일반직종) <span class="text-[8px] text-slate-400 font-medium">(원)</span></span>
+                            <div class="flex items-baseline justify-between mt-1">
+                                <h4 class="text-sm sm:text-base font-extrabold text-slate-900 truncate" id="top-wage_normal">-</h4>
+                                <span class="text-[9px] font-bold" id="pct-wage_normal"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 시계열 차트 & 에스컬레이션 분석 분할 레이아웃 -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 items-start">
+                
+                <!-- 카테고리별 차트 및 확정수치 표 영역 -->
+                <div class="lg:col-span-2 bg-white p-3 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm space-y-3 sm:space-y-4 order-1">
+                    <div class="flex flex-col gap-3 border-b border-slate-100 pb-3">
+                        <div class="flex justify-between items-center flex-wrap gap-2">
+                            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                                <i data-lucide="line-chart" class="text-blue-500 w-4.5 h-4.5"></i> 카테고리별 지표 변동 트렌드
+                            </h3>
+                            <!-- 지수화 환산 옵션 토글 스위치 -->
+                            <div class="flex items-center gap-2 bg-slate-150 px-2.5 py-2 rounded-xl border border-slate-200 w-full sm:w-auto">
+                                <label class="inline-flex items-center cursor-pointer touch-target">
+                                    <input type="checkbox" id="normalize-toggle" onchange="updateTrendsChart()" class="sr-only peer" checked>
+                                    <div class="relative w-9 h-5 sm:w-7 sm:h-4 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 sm:after:h-3 sm:after:w-3 after:transition-all peer-checked:bg-blue-600 shrink-0"></div>
+                                    <span class="ms-2 text-[9px] sm:text-[10px] font-extrabold text-slate-700 leading-tight"><span class="sm:hidden">21.01=100 지수화</span><span class="hidden sm:inline">2021.01 기점 지수화 (Base 100)</span></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- 카테고리 탭 선택 -->
+                        <div class="flex gap-1.5 border-b border-slate-100 pb-1 overflow-x-auto">
+                            <button onclick="changeCategory('all')" id="btn-cat-all" class="cat-btn px-3 py-2 rounded-lg text-xs font-bold touch-target shrink-0 bg-slate-900 text-white shrink-0">전체보기</button>
+                            <button onclick="changeCategory('idx')" id="btn-cat-idx" class="cat-btn px-3 py-2 rounded-lg text-xs font-bold touch-target shrink-0 text-slate-500 bg-slate-100 shrink-0">01. 물가지수</button>
+                            <button onclick="changeCategory('mat')" id="btn-cat-mat" class="cat-btn px-3 py-2 rounded-lg text-xs font-bold touch-target shrink-0 text-slate-500 bg-slate-100 shrink-0">02. 주요 자재</button>
+                            <button onclick="changeCategory('oil')" id="btn-cat-oil" class="cat-btn px-3 py-2 rounded-lg text-xs font-bold touch-target shrink-0 text-slate-500 bg-slate-100 shrink-0">03. 대외 정세</button>
+                            <button onclick="changeCategory('gov')" id="btn-cat-gov" class="cat-btn px-3 py-2 rounded-lg text-xs font-bold touch-target shrink-0 text-slate-500 bg-slate-100 shrink-0">04. 국가 고시</button>
+                        </div>
+
+                        <!-- 개별 체크박스 리스트 (멀티 플롯 지원) -->
+                        <div class="flex flex-wrap gap-x-3 gap-y-1.5 text-[11px]" id="indicator-checkbox-container">
+                            <!-- JS로 카테고리에 맞는 체크박스들이 동적으로 출력됨 -->
+                        </div>
+                    </div>
+
+                    <!-- 차트 영역 (표식 점 제거 완료) -->
+                    <div class="chart-container relative w-full">
+                        <canvas id="trendsChart"></canvas>
+                    </div>
+
+                    <!-- 실시간 데이터 원장 표 영역 -->
+                    <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-sm table-scroll-wrap">
+                        <div class="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
+                            <span class="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                <i data-lucide="table" class="w-3.5 h-3.5 text-slate-500"></i> 선택 지표 시계열 데이터 조회
+                            </span>
+                            <span class="text-[9px] text-slate-400 font-bold">최신 고시월 순 정렬</span>
+                        </div>
+                        <div class="max-h-[140px] sm:max-h-[160px] overflow-y-auto custom-scrollbar table-scroll-wrap">
+                            <table class="data-table-inner w-full text-left text-xs border-collapse">
+                                <thead class="bg-slate-100 text-slate-600 font-bold sticky top-0 border-b border-slate-200 z-10 text-[10px]">
+                                    <tr id="table-header-row">
+                                        <!-- JS에서 선택된 지표 헤더들 동적 로드 -->
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body-rows" class="divide-y divide-slate-100 font-medium">
+                                    <!-- JS에서 수치 데이터 주입 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 에스컬레이션 분석 시뮬레이터 -->
+                <div id="capture-area" class="bg-slate-900 text-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-xl space-y-4 border border-slate-800 order-2 lg:order-none">
+                    <h3 class="text-sm font-bold flex items-center gap-2 text-blue-400 border-b border-slate-800 pb-2.5">
+                        <i data-lucide="calculator" class="w-4.5 h-4.5"></i> 공사비 물가변동 시뮬레이터
+                    </h3>
+
+                    <div class="space-y-3.5 text-xs">
+                        <!-- 지표 대상 선택 -->
+                        <div>
+                            <label class="block text-slate-400 font-bold mb-1">에스컬레이션 기준 지표</label>
+                            <select id="sim-indicator" onchange="calculateEscalation()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 sm:p-2.5 text-white font-bold focus:outline-none focus:border-blue-500 touch-target">
+                                <option value="cci_house" selected>건설공사비지수(주거) 기준</option>
+                                <option value="cci_nonhouse">건설공사비지수(비주거) 기준</option>
+                                <option value="cpi">소비자물가지수 기준</option>
+                                <option value="ppi">생산자물가지수 기준</option>
+                                <option value="rmc">레미콘 25-30-15 기준</option>
+                                <option value="st">철근 SD400 D10 기준</option>
+                                <option value="lme_al">알루미늄 LME시세 기준</option>
+                                <option value="lme_cu">구리 LME시세 기준</option>
+                                <option value="oil_brent">유가(브렌트유) 기준</option>
+                                <option value="oil_dubai">유가(두바이유) 기준</option>
+                                <option value="fx_usd">환율(원/달러) 기준</option>
+                                <option value="fx_eur">환율(원/유로) 기준</option>
+                                <option value="basic_ground">기본형건축비(지상) 기준</option>
+                                <option value="basic_under">기본형건축비(지하) 기준</option>
+                                <option value="standard_cost">표준건축비 기준</option>
+                                <option value="wage_normal">노임단가(일반직종) 기준</option>
+                            </select>
+                        </div>
+                        
+                        <!-- 기점 / 종점 선택 -->
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-slate-400 font-bold mb-1">계약 기점(기준일)</label>
+                                <select id="sim-start-date" onchange="calculateEscalation()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-bold text-xs"></select>
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 font-bold mb-1">변경 종점(비교일)</label>
+                                <select id="sim-end-date" onchange="calculateEscalation()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-bold text-xs"></select>
+                            </div>
+                        </div>
+
+                        <!-- 계약 단가 입력 -->
+                        <div>
+                            <label class="block text-slate-400 font-bold mb-1">계약 당시 평당 단가 (원)</label>
+                            <input type="text" id="sim-unit-price-display" oninput="formatAndCalcUnitPrice(this)" value="6,500,000" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-bold focus:outline-none focus:border-blue-500">
+                            <input type="hidden" id="sim-unit-price" value="6500000">
+                        </div>
+
+                        <!-- 연면적 입력 -->
+                        <div>
+                            <label class="block text-slate-400 font-bold mb-1">총 연면적 (평)</label>
+                            <input type="text" id="sim-area-display" oninput="formatAndCalcArea(this)" placeholder="예: 15,000" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-bold focus:outline-none focus:border-blue-500">
+                            <input type="hidden" id="sim-area" value="0">
+                        </div>
+                    </div>
+
+                    <!-- 산출 분석 스크린 -->
+                    <div class="bg-slate-850 p-4 rounded-2xl border border-slate-800 space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">누적 물가 변동율</span>
+                            <span class="text-lg font-black text-emerald-400" id="sim-rate-result">0.00%</span>
+                        </div>
+                        <div class="border-t border-slate-800/80 pt-2.5 space-y-1.5 text-xs">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400 font-bold">보정 후 예상 단가</span>
+                                <span class="font-extrabold text-slate-200" id="sim-unit-result">- 원/평</span>
+                            </div>
+                            <div class="flex justify-between items-end hidden" id="sim-total-row">
+                                <span class="text-slate-400 font-bold">총 예상 변동액</span>
+                                <span class="font-black text-blue-400 text-sm" id="sim-total-result">- 원</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 결과 리포트 출력 버튼 -->
+                    <button onclick="downloadReport()" class="w-full bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-1.5 border border-slate-700/50">
+                        <i data-lucide="download" class="w-3.5 h-3.5 text-blue-400"></i> 분석 결과 리포트 저장 (PNG)
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: 원시 데이터 편집 룸 -->
+        <div id="content-rawdata" class="hidden bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-5">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3.5 flex-wrap gap-2">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                        <i data-lucide="database" class="text-blue-500 w-5 h-5"></i> 원시 데이터(RAW DATA) 편집실
+                    </h2>
+                    <p class="text-[11px] text-slate-400 mt-1">현업 고시 수치에 부합하도록 2021년 01월부터의 모든 시계열 원장 데이터를 직접 정밀 제어할 수 있습니다.</p>
+                </div>
+                <div class="flex gap-2 text-xs flex-wrap">
+                    <button id="btn-export-share-json" onclick="exportShareJson()" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 rounded-xl transition-all flex items-center gap-1 border border-emerald-500 touch-target">
+                        <i data-lucide="share-2" class="w-3.5 h-3.5"></i> 공유용 JSON 보내기
+                    </button>
+                    <button onclick="downloadBackupCSV()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-2 rounded-xl transition-all flex items-center gap-1 border border-slate-200 touch-target">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i> 원장 백업 (CSV 내보내기)
+                    </button>
+                    <label class="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold px-3 py-2 rounded-xl transition-all flex items-center gap-1 border border-blue-200 relative touch-target">
+                        <i data-lucide="upload" class="w-3.5 h-3.5"></i> 원장 복원 (CSV 가져오기)
+                        <input type="file" id="bulk-csv-import" accept=".csv" class="hidden" onchange="importBackupCSV(event)">
+                    </label>
+                </div>
+            </div>
+
+            <!-- 관리자 제어 가능여부 안내 메시지 -->
+            <div id="admin-notice-bar" class="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex justify-between items-center text-xs text-amber-800">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="alert-circle" class="w-4.5 h-4.5 text-amber-600"></i>
+                    <span>현재는 <strong>일반 조회 상태</strong>입니다. 원시 데이터를 직접 수정, 추가, 삭제하시려면 상단 우측의 <strong>'관리자 권한 인증'</strong>을 거치십시오.</span>
+                </div>
+                <button onclick="toggleAdminMode()" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-lg transition-colors">인증하기</button>
+            </div>
+
+            <!-- 신규 행 추가 폼 (관리자 전용) -->
+            <div id="admin-add-row-form" class="hidden bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-3">
+                <h4 class="text-xs font-bold text-slate-700 flex items-center gap-1"><i data-lucide="plus-circle" class="w-4 h-4 text-blue-500"></i> 신규 월간 고시 데이터 원장 추가</h4>
+                <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-9 gap-2 text-[10px]">
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-500">년월 (YYYY-MM)</label>
+                        <input type="text" id="add-date" placeholder="2026-06" class="border border-slate-300 rounded p-1.5 text-center text-xs bg-white font-bold focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-500">공사비(주거)</label>
+                        <input type="number" step="0.01" id="add-cci_house" class="border border-slate-300 rounded p-1.5 text-center text-xs bg-white focus:outline-none">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-500">공사비(비주거)</label>
+                        <input type="number" step="0.01" id="add-cci_nonhouse" class="border border-slate-300 rounded p-1.5 text-center text-xs bg-white focus:outline-none">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-500">소비자물가</label>
+                        <input type="number" step="0.01" id="add-cpi" class="border border-slate-300 rounded p-1.5 text-center text-xs bg-white focus:outline-none">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-500">생산자물가</label>
+                        <input type="number" step="0.01" id="add-ppi" class="border border-slate-300 rounded p-1.5 text-center text-xs bg-white focus:outline-none">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-500">레미콘</label>
+                        <input type="number" id="add-rmc" class="border border-slate-300 rounded p-1.5 text-center text-xs bg-white focus:outline-none">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-500">철근</label>
+                        <input type="number" id="add-st" class="border border-slate-300 rounded p-1.5 text-center text-xs bg-white focus:outline-none">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-500">알루미늄</label>
+                        <input type="number" id="add-lme_al" class="border border-slate-300 rounded p-1.5 text-center text-xs bg-white focus:outline-none">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-500">구리</label>
+                        <input type="number" id="add-lme_cu" class="border border-slate-300 rounded p-1.5 text-center text-xs bg-white focus:outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-9 gap-2 text-[10px] pt-1">
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-500">브렌트유</label>
+                        <input type="number" step="0.1" id="add-oil_brent" class="border border-slate-300 rounded p-1.5 text-center text-xs bg-white focus:outline-none">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-500">두바이유</label>
+                        <input type="number" step="0.1" id="add-oil_dubai" class="border border-slate-300 rounded p-1.5 text-center text-xs bg-white focus:outline-none">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-500">환율(원/달러)</label>
+                        <input type="number" step="0.1" id="add-fx_usd" class="border border-slate-300 rounded p-1.5 text-center text-xs bg-white focus:outline-none">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-500">환율(원/유로)</label>
+                        <input type="number" step="0.1" id="add-fx_eur" class="border border-slate-300 rounded p-1.5 text-center text-xs bg-white focus:outline-none">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-500">기본건축비(지상)</label>
+                        <input type="number" id="add-basic_ground" class="border border-slate-300 rounded p-1.5 text-center text-xs bg-white focus:outline-none">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-500">기본건축비(지하)</label>
+                        <input type="number" id="add-basic_under" class="border border-slate-300 rounded p-1.5 text-center text-xs bg-white focus:outline-none">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-500">표준건축비</label>
+                        <input type="number" id="add-standard_cost" class="border border-slate-300 rounded p-1.5 text-center text-xs bg-white focus:outline-none">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-500">노임단가(일반)</label>
+                        <input type="number" id="add-wage_normal" class="border border-slate-300 rounded p-1.5 text-center text-xs bg-white focus:outline-none">
+                    </div>
+                    <div class="flex flex-col justify-end">
+                        <button onclick="addRawDataRow()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 rounded text-xs transition-colors">원장 등록</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 지표 편집 그리드 테이블 -->
+            <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <div class="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center text-xs font-bold text-slate-700">
+                    <span>📋 수집 데이터 전체 마스터 원장 시트</span>
+                    <button id="btn-bulk-delete" onclick="deleteAllDataConfirm()" class="hidden bg-red-100 hover:bg-red-200 text-red-600 text-[10px] px-2.5 py-1 rounded-lg border border-red-200 font-extrabold transition-all">전체 일괄 삭제</button>
+                </div>
+                <div class="overflow-x-auto max-h-[400px] custom-scrollbar">
+                    <table class="w-full text-left text-[11px] border-collapse">
+                        <thead class="bg-slate-100 text-slate-600 font-bold sticky top-0 border-b border-slate-200 z-15 text-center">
+                            <tr>
+                                <th class="px-3 py-2 min-w-[75px]">년월</th>
+                                <th class="px-3 py-2 min-w-[70px] bg-indigo-50/50">공사비(주)</th>
+                                <th class="px-3 py-2 min-w-[70px] bg-indigo-50/50">공사비(비)</th>
+                                <th class="px-3 py-2 min-w-[65px] bg-indigo-50/50">소비자</th>
+                                <th class="px-3 py-2 min-w-[65px] bg-indigo-50/50">생산자</th>
+                                <th class="px-3 py-2 min-w-[80px] bg-emerald-50/50">레미콘</th>
+                                <th class="px-3 py-2 min-w-[80px] bg-emerald-50/50">철근</th>
+                                <th class="px-3 py-2 min-w-[75px] bg-emerald-50/50">Al(LME)</th>
+                                <th class="px-3 py-2 min-w-[75px] bg-emerald-50/50">Cu(LME)</th>
+                                <th class="px-3 py-2 min-w-[70px] bg-amber-50/50">브렌트유</th>
+                                <th class="px-3 py-2 min-w-[70px] bg-amber-50/50">두바이유</th>
+                                <th class="px-3 py-2 min-w-[75px] bg-amber-50/50">USD환율</th>
+                                <th class="px-3 py-2 min-w-[75px] bg-amber-50/50">EUR환율</th>
+                                <th class="px-3 py-2 min-w-[80px] bg-rose-50/50">기본형(지상)</th>
+                                <th class="px-3 py-2 min-w-[80px] bg-rose-50/50">기본형(지하)</th>
+                                <th class="px-3 py-2 min-w-[75px] bg-rose-50/50">표준건축비</th>
+                                <th class="px-3 py-2 min-w-[75px] bg-rose-50/50">노임(일반)</th>
+                                <th id="th-action-header" class="px-3 py-2 min-w-[50px] hidden">제어</th>
+                            </tr>
+                        </thead>
+                        <tbody id="master-sheet-body" class="divide-y divide-slate-100 text-center font-semibold">
+                            <!-- JS에서 정밀 바인딩 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: 지표 가이드 & 해설 가이드 -->
+        <div id="content-guide" class="hidden bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+            <div>
+                <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                    <i data-lucide="book-open-check" class="text-blue-500 w-5 h-5"></i> 주요 지표 산식 및 실무 지침서
+                </h2>
+                <p class="text-xs text-slate-400 mt-1">사내 적산, 계약금액 조정(에스컬레이션) 검토 및 제안서 작성 시 공식 준용 기준입니다.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="guide-container">
+                <!-- 가이드 데이터가 동적 구성됩니다. -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- 푸터 -->
+    <footer class="bg-slate-900 text-slate-400 text-center py-6 px-4 text-[11px] space-y-2 border-t border-slate-800 mt-6 sm:mt-10 safe-area-x">
+        <p class="font-bold uppercase tracking-widest text-[9px] text-slate-500">Hyundai Engineering & Construction Co., Ltd.</p>
+        <p>본 정보는 사내 모니터링 분석 자료이며, 최종 공식 조율 단계에서는 법적 검토가 별도로 수반되어야 합니다.</p>
+        <div class="flex flex-col sm:flex-row justify-center gap-2 sm:gap-4 text-slate-500">
+            <a href="https://cost.kict.re.kr/" target="_blank" class="hover:text-blue-400 transition-colors">공사비원가관리센터</a> | 
+            <a href="https://ecos.bok.or.kr/" target="_blank" class="hover:text-blue-400 transition-colors">통계청/한국은행 ECOS</a> | 
+            <a href="https://www.law.go.kr/" target="_blank" class="hover:text-blue-400 transition-colors">국가법령정보센터</a>
+        </div>
+    </footer>
+
+    <script>
+        const DATA_CONFIG_KEY = 'hec_data_config';
+        const DATA_CACHE_KEY = 'hec_remote_cache';
+        let dataConfig = { jsonUrl: '', pollIntervalMs: 30000 };
+        let connectionStatus = 'unset';
+        let pollTimerId = null;
+
+        // 마스터 데이터 원장 (2021-01부터 2026-05까지 정합성 중심 설계)
+        const defaultRawData = [
+            { date: "2021-01", cci_house: 103.80, cci_nonhouse: 104.08, cpi: 101.04, ppi: 100.22, rmc: 73187, st: 690000, lme_al: 2004, lme_cu: 7972, oil_brent: 55.3, oil_dubai: 54.8, fx_usd: 1101.5, fx_eur: 1341.2, basic_ground: 1729000, basic_under: 1680000, standard_cost: 1040000, wage_normal: 139100 },
+            { date: "2021-02", cci_house: 104.29, cci_nonhouse: 104.67, cpi: 101.58, ppi: 101.12, rmc: 73187, st: 720000, lme_al: 2080, lme_cu: 8460, oil_brent: 62.2, oil_dubai: 60.9, fx_usd: 1111.7, fx_eur: 1345.5, basic_ground: 1729000, basic_under: 1680000, standard_cost: 1040000, wage_normal: 139100 },
+            { date: "2021-03", cci_house: 105.28, cci_nonhouse: 105.81, cpi: 101.84, ppi: 102.04, rmc: 73187, st: 770000, lme_al: 2192, lme_cu: 9005, oil_brent: 65.7, oil_dubai: 64.4, fx_usd: 1125.4, fx_eur: 1339.8, basic_ground: 1750000, basic_under: 1700000, standard_cost: 1040000, wage_normal: 139100 },
+            { date: "2021-04", cci_house: 107.58, cci_nonhouse: 108.15, cpi: 101.98, ppi: 102.85, rmc: 73187, st: 770000, lme_al: 2324, lme_cu: 9336, oil_brent: 65.3, oil_dubai: 63.1, fx_usd: 1119.4, fx_eur: 1338.1, basic_ground: 1750000, basic_under: 1700000, standard_cost: 1040000, wage_normal: 139100 },
+            { date: "2021-05", cci_house: 109.51, cci_nonhouse: 110.32, cpi: 102.05, ppi: 103.77, rmc: 73187, st: 830000, lme_al: 2434, lme_cu: 10162, oil_brent: 68.3, oil_dubai: 66.8, fx_usd: 1123.1, fx_eur: 1361.5, basic_ground: 1750000, basic_under: 1700000, standard_cost: 1040000, wage_normal: 139100 },
+            { date: "2021-06", cci_house: 110.73, cci_nonhouse: 111.60, cpi: 102.05, ppi: 104.45, rmc: 73187, st: 900000, lme_al: 2445, lme_cu: 9612, oil_brent: 73.4, oil_dubai: 71.3, fx_usd: 1121.3, fx_eur: 1344.2, basic_ground: 1750000, basic_under: 1700000, standard_cost: 1040000, wage_normal: 139100 },
+            { date: "2021-07", cci_house: 111.78, cci_nonhouse: 112.71, cpi: 102.26, ppi: 105.18, rmc: 73187, st: 960000, lme_al: 2492, lme_cu: 9434, oil_brent: 74.3, oil_dubai: 72.9, fx_usd: 1143.5, fx_eur: 1354.1, basic_ground: 1750000, basic_under: 1700000, standard_cost: 1040000, wage_normal: 139100 },
+            { date: "2021-08", cci_house: 113.41, cci_nonhouse: 114.61, cpi: 102.75, ppi: 106.12, rmc: 73187, st: 990000, lme_al: 2611, lme_cu: 9357, oil_brent: 70.5, oil_dubai: 69.1, fx_usd: 1160.4, fx_eur: 1365.2, basic_ground: 1750000, basic_under: 1700000, standard_cost: 1040000, wage_normal: 139100 },
+            { date: "2021-09", cci_house: 114.76, cci_nonhouse: 116.01, cpi: 103.17, ppi: 107.24, rmc: 73187, st: 990000, lme_al: 2839, lme_cu: 9324, oil_brent: 74.8, oil_dubai: 72.7, fx_usd: 1175.3, fx_eur: 1378.8, basic_ground: 1780000, basic_under: 1730000, standard_cost: 1040000, wage_normal: 141200 },
+            { date: "2021-10", cci_house: 115.89, cci_nonhouse: 117.22, cpi: 103.35, ppi: 108.45, rmc: 80500, st: 1058000, lme_al: 2955, lme_cu: 9779, oil_brent: 83.7, oil_dubai: 81.6, fx_usd: 1182.2, fx_eur: 1371.4, basic_ground: 1780000, basic_under: 1730000, standard_cost: 1040000, wage_normal: 141200 },
+            { date: "2021-11", cci_house: 116.26, cci_nonhouse: 117.64, cpi: 103.87, ppi: 109.12, rmc: 80500, st: 1058000, lme_al: 2638, lme_cu: 9765, oil_brent: 80.8, oil_dubai: 80.3, fx_usd: 1184.9, fx_eur: 1341.5, basic_ground: 1780000, basic_under: 1730000, standard_cost: 1040000, wage_normal: 141200 },
+            { date: "2021-12", cci_house: 116.47, cci_nonhouse: 117.84, cpi: 104.04, ppi: 109.02, rmc: 80500, st: 1060000, lme_al: 2695, lme_cu: 9550, oil_brent: 74.8, oil_dubai: 73.2, fx_usd: 1186.2, fx_eur: 1342.8, basic_ground: 1780000, basic_under: 1730000, standard_cost: 1040000, wage_normal: 141200 },
+            { date: "2022-01", cci_house: 118.85, cci_nonhouse: 120.11, cpi: 104.85, ppi: 110.15, rmc: 80500, st: 1066000, lme_al: 3003, lme_cu: 9776, oil_brent: 85.6, oil_dubai: 83.5, fx_usd: 1194.5, fx_eur: 1352.5, basic_ground: 1780000, basic_under: 1730000, standard_cost: 1040000, wage_normal: 148500 },
+            { date: "2022-02", cci_house: 119.13, cci_nonhouse: 120.36, cpi: 105.42, ppi: 111.45, rmc: 80500, st: 1066000, lme_al: 3260, lme_cu: 9866, oil_brent: 94.1, oil_dubai: 92.4, fx_usd: 1198.8, fx_eur: 1358.1, basic_ground: 1780000, basic_under: 1730000, standard_cost: 1040000, wage_normal: 148500 },
+            { date: "2022-03", cci_house: 120.31, cci_nonhouse: 121.50, cpi: 106.10, ppi: 112.89, rmc: 80500, st: 1085000, lme_al: 3537, lme_cu: 10237, oil_brent: 112.4, oil_dubai: 110.9, fx_usd: 1221.3, fx_eur: 1345.2, basic_ground: 1829000, basic_under: 1780000, standard_cost: 1040000, wage_normal: 148500 },
+            { date: "2022-04", cci_house: 121.99, cci_nonhouse: 123.21, cpi: 106.83, ppi: 114.12, rmc: 80500, st: 1097000, lme_al: 3256, lme_cu: 10183, oil_brent: 104.6, oil_dubai: 102.7, fx_usd: 1232.5, fx_eur: 1332.8, basic_ground: 1829000, basic_under: 1780000, standard_cost: 1040000, wage_normal: 148500 },
+            { date: "2022-05", cci_house: 123.48, cci_nonhouse: 124.72, cpi: 107.50, ppi: 115.15, rmc: 80500, st: 1150000, lme_al: 2824, lme_cu: 9363, oil_brent: 111.4, oil_dubai: 108.1, fx_usd: 1268.4, fx_eur: 1335.1, basic_ground: 1829000, basic_under: 1780000, standard_cost: 1040000, wage_normal: 148500 },
+            { date: "2022-06", cci_house: 123.67, cci_nonhouse: 124.89, cpi: 108.21, ppi: 115.84, rmc: 90960, st: 1175000, lme_al: 2568, lme_cu: 9024, oil_brent: 117.5, oil_dubai: 111.6, fx_usd: 1277.3, fx_eur: 1344.1, basic_ground: 1829000, basic_under: 1780000, standard_cost: 1040000, wage_normal: 148500 },
+            { date: "2022-07", cci_house: 124.08, cci_nonhouse: 125.13, cpi: 108.73, ppi: 115.52, rmc: 90960, st: 1197000, lme_al: 2401, lme_cu: 7530, oil_brent: 105.1, oil_dubai: 103.1, fx_usd: 1307.2, fx_eur: 1331.4, basic_ground: 1829000, basic_under: 1780000, standard_cost: 1040000, wage_normal: 148500 },
+            { date: "2022-08", cci_house: 123.14, cci_nonhouse: 124.35, cpi: 108.63, ppi: 115.22, rmc: 90960, st: 1179000, lme_al: 2431, lme_cu: 7961, oil_brent: 99.0, oil_dubai: 96.4, fx_usd: 1318.4, fx_eur: 1323.5, basic_ground: 1829000, basic_under: 1780000, standard_cost: 1040000, wage_normal: 148500 },
+            { date: "2022-09", cci_house: 124.21, cci_nonhouse: 125.32, cpi: 108.82, ppi: 115.42, rmc: 90960, st: 1025000, lme_al: 2230, lme_cu: 7735, oil_brent: 90.6, oil_dubai: 91.0, fx_usd: 1391.5, fx_eur: 1378.1, basic_ground: 1904000, basic_under: 1850000, standard_cost: 1040000, wage_normal: 153100 },
+            { date: "2022-10", cci_house: 124.24, cci_nonhouse: 125.30, cpi: 109.16, ppi: 115.82, rmc: 90960, st: 1025000, lme_al: 2244, lme_cu: 7623, oil_brent: 93.3, oil_dubai: 91.2, fx_usd: 1426.4, fx_eur: 1395.1, basic_ground: 1904000, basic_under: 1850000, standard_cost: 1040000, wage_normal: 153100 },
+            { date: "2022-11", cci_house: 124.44, cci_nonhouse: 125.40, cpi: 109.07, ppi: 115.12, rmc: 90960, st: 1025000, lme_al: 2351, lme_cu: 8030, oil_brent: 90.8, oil_dubai: 86.3, fx_usd: 1362.1, fx_eur: 1386.1, basic_ground: 1904000, basic_under: 1850000, standard_cost: 1040000, wage_normal: 153100 },
+            { date: "2022-12", cci_house: 124.23, cci_nonhouse: 125.12, cpi: 109.26, ppi: 114.52, rmc: 90960, st: 1025000, lme_al: 2400, lme_cu: 8372, oil_brent: 81.3, oil_dubai: 77.2, fx_usd: 1291.5, fx_eur: 1365.1, basic_ground: 1904000, basic_under: 1850000, standard_cost: 1040000, wage_normal: 153100 },
+            { date: "2023-01", cci_house: 125.98, cci_nonhouse: 126.83, cpi: 110.07, ppi: 115.22, rmc: 90960, st: 1025000, lme_al: 2497, lme_cu: 9005, oil_brent: 83.9, oil_dubai: 80.4, fx_usd: 1240.2, fx_eur: 1341.2, basic_ground: 1904000, basic_under: 1850000, standard_cost: 1040000, wage_normal: 157200 },
+            { date: "2023-02", cci_house: 126.05, cci_nonhouse: 126.90, cpi: 110.33, ppi: 115.45, rmc: 94990, st: 1025000, lme_al: 2414, lme_cu: 8955, oil_brent: 83.5, oil_dubai: 82.1, fx_usd: 1278.4, fx_eur: 1361.5, basic_ground: 1904000, basic_under: 1850000, standard_cost: 1040000, wage_normal: 157200 },
+            { date: "2023-03", cci_house: 126.28, cci_nonhouse: 127.09, cpi: 110.52, ppi: 115.65, rmc: 95960, st: 1012000, lme_al: 2293, lme_cu: 8836, oil_brent: 79.2, oil_dubai: 78.5, fx_usd: 1305.1, fx_eur: 1395.1, basic_ground: 1943000, basic_under: 1890000, standard_cost: 1040000, wage_normal: 157200 },
+            { date: "2023-04", cci_house: 126.40, cci_nonhouse: 127.24, cpi: 110.77, ppi: 115.82, rmc: 100510, st: 1025000, lme_al: 2341, lme_cu: 8814, oil_brent: 84.6, oil_dubai: 83.0, fx_usd: 1322.4, fx_eur: 1441.5, basic_ground: 1943000, basic_under: 1890000, standard_cost: 1040000, wage_normal: 157200 },
+            { date: "2023-05", cci_house: 126.49, cci_nonhouse: 127.27, cpi: 111.13, ppi: 115.22, rmc: 100510, st: 1033000, lme_al: 2268, lme_cu: 8234, oil_brent: 75.7, oil_dubai: 75.0, fx_usd: 1328.1, fx_eur: 1435.1, basic_ground: 1943000, basic_under: 1890000, standard_cost: 1040000, wage_normal: 157200 },
+            { date: "2023-06", cci_house: 126.51, cci_nonhouse: 127.36, cpi: 111.16, ppi: 114.85, rmc: 100510, st: 1033000, lme_al: 2181, lme_cu: 8386, oil_brent: 74.9, oil_dubai: 75.0, fx_usd: 1297.2, fx_eur: 1412.1, basic_ground: 1943000, basic_under: 1890000, standard_cost: 1040000, wage_normal: 157200 },
+            { date: "2023-07", cci_house: 126.34, cci_nonhouse: 127.19, cpi: 111.29, ppi: 114.52, rmc: 100510, st: 1033000, lme_al: 2154, lme_cu: 8440, oil_brent: 80.1, oil_dubai: 80.4, fx_usd: 1286.4, fx_eur: 1421.1, basic_ground: 1943000, basic_under: 1890000, standard_cost: 1040000, wage_normal: 157200 },
+            { date: "2023-08", cci_house: 126.33, cci_nonhouse: 127.19, cpi: 112.28, ppi: 115.42, rmc: 100510, st: 1033000, lme_al: 2135, lme_cu: 8352, oil_brent: 85.1, oil_dubai: 86.1, fx_usd: 1324.1, fx_eur: 1441.5, basic_ground: 1943000, basic_under: 1890000, standard_cost: 1040000, wage_normal: 157200 },
+            { date: "2023-09", cci_house: 128.33, cci_nonhouse: 129.09, cpi: 112.85, ppi: 116.52, rmc: 100510, st: 1033000, lme_al: 2184, lme_cu: 8270, oil_brent: 92.5, oil_dubai: 93.3, fx_usd: 1335.2, fx_eur: 1428.1, basic_ground: 1976000, basic_under: 1920000, standard_cost: 1040000, wage_normal: 161800 },
+            { date: "2023-10", cci_house: 128.15, cci_nonhouse: 128.90, cpi: 113.27, ppi: 116.82, rmc: 100510, st: 1033000, lme_al: 2192, lme_cu: 7937, oil_brent: 88.7, oil_dubai: 89.7, fx_usd: 1350.1, fx_eur: 1425.1, basic_ground: 1976000, basic_under: 1920000, standard_cost: 1040000, wage_normal: 161800 },
+            { date: "2023-11", cci_house: 127.99, cci_nonhouse: 128.70, cpi: 112.68, ppi: 115.92, rmc: 100510, st: 1033000, lme_al: 2201, lme_cu: 8182, oil_brent: 82.6, oil_dubai: 83.1, fx_usd: 1310.2, fx_eur: 1425.1, basic_ground: 1976000, basic_under: 1920000, standard_cost: 1040000, wage_normal: 161800 },
+            { date: "2023-12", cci_house: 127.87, cci_nonhouse: 128.58, cpi: 112.73, ppi: 115.82, rmc: 100510, st: 1011000, lme_al: 2178, lme_cu: 8464, oil_brent: 77.3, oil_dubai: 77.3, fx_usd: 1297.4, fx_eur: 1421.1, basic_ground: 1976000, basic_under: 1920000, standard_cost: 1140000, wage_normal: 161800 },
+            { date: "2024-01", cci_house: 128.93, cci_nonhouse: 129.52, cpi: 113.17, ppi: 116.22, rmc: 100510, st: 1001000, lme_al: 2161, lme_cu: 8339, oil_brent: 79.1, oil_dubai: 78.9, fx_usd: 1315.5, fx_eur: 1431.1, basic_ground: 1976000, basic_under: 1920000, standard_cost: 1140000, wage_normal: 165500 },
+            { date: "2024-02", cci_house: 129.21, cci_nonhouse: 129.77, cpi: 113.78, ppi: 116.85, rmc: 100510, st: 988000, lme_al: 2177, lme_cu: 8400, oil_brent: 81.7, oil_dubai: 80.8, fx_usd: 1331.2, fx_eur: 1435.5, basic_ground: 1976000, basic_under: 1920000, standard_cost: 1140000, wage_normal: 165500 },
+            { date: "2024-03", cci_house: 129.14, cci_nonhouse: 129.74, cpi: 113.95, ppi: 117.12, rmc: 106130, st: 988000, lme_al: 2221, lme_cu: 8684, oil_brent: 85.4, oil_dubai: 84.1, fx_usd: 1335.4, fx_eur: 1450.1, basic_ground: 2038000, basic_under: 1980000, standard_cost: 1140000, wage_normal: 165500 },
+            { date: "2024-04", cci_house: 129.10, cci_nonhouse: 129.71, cpi: 114.01, ppi: 117.52, rmc: 106130, st: 988000, lme_al: 2445, lme_cu: 9403, oil_brent: 89.0, oil_dubai: 88.3, fx_usd: 1368.1, fx_eur: 1461.1, basic_ground: 2038000, basic_under: 1980000, standard_cost: 1140000, wage_normal: 165500 },
+            { date: "2024-05", cci_house: 129.08, cci_nonhouse: 129.74, cpi: 114.10, ppi: 117.58, rmc: 106130, st: 988000, lme_al: 2568, lme_cu: 10124, oil_brent: 83.0, oil_dubai: 83.9, fx_usd: 1365.1, fx_eur: 1478.1, basic_ground: 2038000, basic_under: 1980000, standard_cost: 1140000, wage_normal: 165500 },
+            { date: "2024-06", cci_house: 128.95, cci_nonhouse: 129.62, cpi: 113.84, ppi: 117.42, rmc: 106130, st: 938000, lme_al: 2501, lme_cu: 9537, oil_brent: 82.5, oil_dubai: 82.5, fx_usd: 1380.2, fx_eur: 1477.5, basic_ground: 2038000, basic_under: 1980000, standard_cost: 1140000, wage_normal: 165500 },
+            { date: "2024-07", cci_house: 128.79, cci_nonhouse: 129.50, cpi: 114.13, ppi: 117.52, rmc: 106130, st: 898000, lme_al: 2420, lme_cu: 9243, oil_brent: 83.8, oil_dubai: 83.8, fx_usd: 1383.5, fx_eur: 1495.1, basic_ground: 2038000, basic_under: 1980000, standard_cost: 1140000, wage_normal: 165500 },
+            { date: "2024-08", cci_house: 128.70, cci_nonhouse: 129.34, cpi: 114.54, ppi: 117.58, rmc: 106130, st: 878000, lme_al: 2351, lme_cu: 8950, oil_brent: 77.1, oil_dubai: 77.6, fx_usd: 1354.1, fx_eur: 1495.1, basic_ground: 2038000, basic_under: 1980000, standard_cost: 1140000, wage_normal: 165500 },
+            { date: "2024-09", cci_house: 129.43, cci_nonhouse: 130.02, cpi: 114.65, ppi: 118.02, rmc: 106130, st: 908000, lme_al: 2490, lme_cu: 9235, oil_brent: 72.8, oil_dubai: 73.5, fx_usd: 1335.2, fx_eur: 1485.5, basic_ground: 2106000, basic_under: 2040000, standard_cost: 1140000, wage_normal: 170500 },
+            { date: "2024-10", cci_house: 129.23, cci_nonhouse: 129.85, cpi: 114.69, ppi: 118.12, rmc: 106130, st: 928000, lme_al: 2554, lme_cu: 9553, oil_brent: 75.3, oil_dubai: 74.4, fx_usd: 1365.1, fx_eur: 1481.1, basic_ground: 2106000, basic_under: 2040000, standard_cost: 1140000, wage_normal: 170500 },
+            { date: "2024-11", cci_house: 129.17, cci_nonhouse: 129.75, cpi: 114.40, ppi: 117.85, rmc: 106130, st: 898000, lme_al: 2580, lme_cu: 9015, oil_brent: 73.1, oil_dubai: 72.0, fx_usd: 1395.2, fx_eur: 1465.1, basic_ground: 2106000, basic_under: 2040000, standard_cost: 1140000, wage_normal: 170500 },
+            { date: "2024-12", cci_house: 129.01, cci_nonhouse: 129.61, cpi: 114.91, ppi: 117.92, rmc: 106130, st: 848000, lme_al: 2541, lme_cu: 8352, oil_brent: 73.2, oil_dubai: 72.8, fx_usd: 1401.5, fx_eur: 1455.5, basic_ground: 2106000, basic_under: 2040000, standard_cost: 1140000, wage_normal: 170500 },
+            { date: "2025-01", cci_house: 129.88, cci_nonhouse: 130.47, cpi: 115.71, ppi: 118.52, rmc: 106130, st: 838000, lme_al: 2512, lme_cu: 8430, oil_brent: 72.1, oil_dubai: 71.5, fx_usd: 1395.2, fx_eur: 1445.1, basic_ground: 2106000, basic_under: 2040000, standard_cost: 1140000, wage_normal: 175600 },
+            { date: "2025-02", cci_house: 129.85, cci_nonhouse: 130.44, cpi: 116.08, ppi: 118.95, rmc: 106130, st: 828000, lme_al: 2501, lme_cu: 8520, oil_brent: 73.5, oil_dubai: 73.0, fx_usd: 1388.1, fx_eur: 1442.1, basic_ground: 2106000, basic_under: 2040000, standard_cost: 1140000, wage_normal: 175600 },
+            { date: "2025-03", cci_house: 129.80, cci_nonhouse: 130.53, cpi: 116.29, ppi: 119.12, rmc: 106130, st: 828000, lme_al: 2530, lme_cu: 8610, oil_brent: 71.5, oil_dubai: 71.2, fx_usd: 1375.4, fx_eur: 1455.1, basic_ground: 2150000, basic_under: 2090000, standard_cost: 1140000, wage_normal: 175600 },
+            { date: "2025-04", cci_house: 129.81, cci_nonhouse: 130.53, cpi: 116.38, ppi: 119.24, rmc: 106130, st: 808000, lme_al: 2515, lme_cu: 8850, oil_brent: 72.9, oil_dubai: 72.4, fx_usd: 1365.1, fx_eur: 1461.1, basic_ground: 2150000, basic_under: 2090000, standard_cost: 1140000, wage_normal: 175600 },
+            { date: "2025-05", cci_house: 129.82, cci_nonhouse: 130.56, cpi: 116.27, ppi: 119.02, rmc: 103470, st: 828000, lme_al: 2480, lme_cu: 8910, oil_brent: 71.2, oil_dubai: 70.8, fx_usd: 1358.2, fx_eur: 1445.5, basic_ground: 2150000, basic_under: 2090000, standard_cost: 1140000, wage_normal: 175600 }
+        ];
+
+        let rawData = JSON.parse(localStorage.getItem('hec_master_db')) || defaultRawData;
+
+        // 지표 메타 가이드 규정 정보
+        const defaultGuides = {
+            cci_house: { title: "건설공사비지수(주거용)", desc: "한국건설기술연구원 공사비원가관리센터 고시. 주거용 건물 공종의 노무, 재료, 장비 비용의 물가 동향을 가중 평균한 종합 변동 지표입니다." },
+            cci_nonhouse: { title: "건설공사비지수(비주거용)", desc: "한국건설기술연구원 고시. 주거를 제외한 빌딩, 시설물 및 공장 등 비주거용 건축 공종의 에스컬레이션 원장 산식에 사용됩니다." },
+            cpi: { title: "소비자물가지수 (CPI)", desc: "통계청 및 한국은행 ECOS 고시. 국민 생활과 밀접한 상품 및 서비스의 가중 가격 변동으로 민간 도급 계약금 조정 시 대용 준용 지표입니다." },
+            ppi: { title: "생산자물가지수 (PPI)", desc: "한국은행 고시. 기업 간 거래되는 1차 유통 상품의 원가 변동을 추적하며, 가공 및 건자재 가공 비용의 선행 지표로 활용됩니다." },
+            rmc: { title: "레미콘 25-30-15 규격", desc: "한국물가협회 / 조달청 나라장터 고시 가격 기준. 콘크리트 및 구조 타설 공사의 실질적인 원가 단가(원/㎥) 추이 기준입니다." },
+            st: { title: "철근 SD400 D10 규격", desc: "대한건설협회 거래가격 및 조달청 원자재 단가 기준. 고강도 이형철근 품목의 실무 시장 유통 가격(원/톤) 정보입니다." },
+            lme_al: { title: "알루미늄 LME 시세", desc: "런던금속거래소(LME) 공식 고시 현물 시세($/톤). 알루미늄 창호 및 커튼월 공종의 뼈대 원가 변동을 분석합니다." },
+            lme_cu: { title: "구리 LME 시세", desc: "런던금속거래소(LME) 고시 현물 시세($/톤). 전선, 동관 및 설비 배관 부재의 원가 변동 추적에 활용됩니다." },
+            oil_brent: { title: "유가 (브렌트유 Price)", desc: "유럽 ICE 거래소 Brent유 공식 Price($/BBL). 화학 자재 및 해상 물류 가중치 파악의 기준입니다." },
+            oil_dubai: { title: "유가 (두바이유 Price)", desc: "한국석유공사 오피넷 고시 Dubai유 Price($/BBL). 아시아 대표 유종으로 국내 석유화학 제품 원가의 지침입니다." },
+            fx_usd: { title: "환율 (원/달러 환율)", desc: "서울외환시장 고시 기준 환율. 플랜트 자재 및 해외 수입 자재 조달 에스컬레이션의 직접 변수입니다." },
+            fx_eur: { title: "환율 (원/유로 환율)", desc: "외환 시장 기준 재정환율. 유럽산 고가 설비 및 마감재 수입 가중 단가 보정에 활용됩니다." },
+            basic_ground: { title: "기본형건축비(지상층)", desc: "국토교통부 고시 / 국가법령정보센터 규정. 분양가상한제 적용 주택의 지상층 직접공사비 상한 상정 기준 단가(원/㎡)입니다." },
+            basic_under: { title: "기본형건축비(지하층)", desc: "국토교통부 고시 / 국가법령정보센터 규정. 흙막이, 토공사 및 지하 주차 공간 구성을 상정하는 기준 단가(원/㎡)입니다." },
+            standard_cost: { title: "표준건축비 (공공주택)", desc: "국가법령정보센터 '공공주택 특별법' 고시 기준. 영구임대 및 국민임대 주택 적산의 조달 상한가 단가(원/㎡) 지표입니다." },
+            wage_normal: { title: "노임단가(일반직종)", desc: "대한건설협회 반기 고시 '공중인부 건설업 시중노임단가' 중 일반인부 노임 기준단가(원)입니다." }
+        };
+
+        let guideData = JSON.parse(localStorage.getItem('hec_master_guides')) || defaultGuides;
+
+        // 메타 데이터 구조 정의 (체크박스 생성 및 카테고리 매핑용)
+        const indicatorMeta = {
+            cci_house: { title: "건설공사비(주거)", category: "idx", color: "#4f46e5" },
+            cci_nonhouse: { title: "건설공사비(비주거)", category: "idx", color: "#6366f1" },
+            cpi: { title: "소비자물가", category: "idx", color: "#3b82f6" },
+            ppi: { title: "생산자물가", category: "idx", color: "#06b6d4" },
+            
+            rmc: { title: "레미콘 25-30-15", category: "mat", color: "#10b981" },
+            st: { title: "철근 SD400 D10", category: "mat", color: "#059669" },
+            lme_al: { title: "알루미늄 LME", category: "mat", color: "#34d399" },
+            lme_cu: { title: "구리 LME", category: "mat", color: "#047857" },
+            
+            oil_brent: { title: "유가(브렌트유)", category: "oil", color: "#f59e0b" },
+            oil_dubai: { title: "유가(두바이유)", category: "oil", color: "#d97706" },
+            fx_usd: { title: "환율(원/달러)", category: "oil", color: "#b45309" },
+            fx_eur: { title: "환율(원/유로)", category: "oil", color: "#78350f" },
+            
+            basic_ground: { title: "기본형건축비(지상)", category: "gov", color: "#f43f5e" },
+            basic_under: { title: "기본형건축비(지하)", category: "gov", color: "#e11d48" },
+            standard_cost: { title: "표준건축비", category: "gov", color: "#be123c" },
+            wage_normal: { title: "노임단가(일반)", category: "gov", color: "#9f1239" }
+        };
+
+        let activeCategory = 'all';
+        let selectedIndicators = ['cci_house', 'cci_nonhouse', 'cpi']; // 초기 차트 및 표 렌더링 선택
+        let trendsChartInstance = null;
+        let isAdminMode = false;
+
+        window.onload = function() {
+            lucide.createIcons();
+            loadDataConfig();
+            populateConfigUI();
+            applyUserModeUI();
+            loadRemoteData(false);
+            startPolling();
+            let resizeTimer;
+            window.addEventListener('resize', function() {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(function() {
+                    if (trendsChartInstance) trendsChartInstance.resize();
+                }, 150);
+            });
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden && dataConfig.jsonUrl) loadRemoteData(false);
+            });
+        };
+
+        function loadDataConfig() {
+            try {
+                const saved = localStorage.getItem(DATA_CONFIG_KEY);
+                if (saved) dataConfig = { jsonUrl: '', pollIntervalMs: 30000, ...JSON.parse(saved) };
+            } catch (e) {}
+        }
+
+        function saveDataConfig() {
+            localStorage.setItem(DATA_CONFIG_KEY, JSON.stringify(dataConfig));
+        }
+
+        function populateConfigUI() {
+            const urlEl = document.getElementById('config-json-url');
+            const pollEl = document.getElementById('config-poll-interval');
+            if (urlEl) urlEl.value = dataConfig.jsonUrl || '';
+            if (pollEl) pollEl.value = Math.round((dataConfig.pollIntervalMs || 30000) / 1000);
+        }
+
+        function toggleDataConfig() {
+            const panel = document.getElementById('data-config-panel');
+            if (!panel) return;
+            panel.classList.toggle('hidden');
+            if (!panel.classList.contains('hidden')) populateConfigUI();
+            lucide.createIcons();
+        }
+
+        function saveDataConfigFromUI() {
+            const urlEl = document.getElementById('config-json-url');
+            const pollEl = document.getElementById('config-poll-interval');
+            dataConfig.jsonUrl = urlEl ? urlEl.value.trim() : '';
+            const sec = pollEl ? parseInt(pollEl.value, 10) : 30;
+            dataConfig.pollIntervalMs = Math.max(10000, (isNaN(sec) ? 30 : sec) * 1000);
+            saveDataConfig();
+            startPolling();
+            loadRemoteData(true);
+            toggleDataConfig();
+        }
+
+        function showNoUrlBanner(show) {
+            const banner = document.getElementById('no-url-banner');
+            if (banner) banner.classList.toggle('hidden', !show);
+            if (show) lucide.createIcons();
+        }
+
+        function updateConnectionStatus() {
+            const el = document.getElementById('connection-status');
+            if (!el) return;
+            const map = {
+                connected: { text: '연결됨', cls: 'text-emerald-400 bg-emerald-900/40 border-emerald-700/50' },
+                offline: { text: '오프라인', cls: 'text-amber-400 bg-amber-900/40 border-amber-700/50' },
+                unset: { text: 'URL미설정', cls: 'text-slate-400 bg-slate-800/80 border-slate-700/50' }
+            };
+            const s = map[connectionStatus] || map.unset;
+            el.className = 'text-[10px] px-2.5 py-1.5 rounded-lg border flex items-center gap-1.5 touch-target ' + s.cls;
+            el.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-current"></span>' + s.text;
+        }
+
+        function applyLocalFallback() {
+            rawData = JSON.parse(localStorage.getItem('hec_master_db')) || defaultRawData;
+            guideData = JSON.parse(localStorage.getItem('hec_master_guides')) || defaultGuides;
+            try {
+                const cached = localStorage.getItem(DATA_CACHE_KEY);
+                if (cached) {
+                    const data = JSON.parse(cached);
+                    if (data.db && Array.isArray(data.db)) rawData = data.db;
+                    if (data.guides) guideData = data.guides;
+                }
+            } catch (e) {}
+        }
+
+        async function loadRemoteData(manual) {
+            const url = (dataConfig.jsonUrl || '').trim();
+            if (!url) {
+                connectionStatus = 'unset';
+                showNoUrlBanner(true);
+                applyLocalFallback();
+                updateConnectionStatus();
+                initDashboard();
+                return;
+            }
+            showNoUrlBanner(false);
+            try {
+                const res = await fetch(url, { cache: 'no-store' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const payload = await res.json();
+                if (payload.db && Array.isArray(payload.db)) {
+                    rawData = payload.db;
+                    localStorage.setItem('hec_master_db', JSON.stringify(rawData));
+                }
+                if (payload.guides) {
+                    guideData = payload.guides;
+                    localStorage.setItem('hec_master_guides', JSON.stringify(guideData));
+                }
+                localStorage.setItem(DATA_CACHE_KEY, JSON.stringify({
+                    version: payload.version,
+                    updatedAt: payload.updatedAt,
+                    db: rawData,
+                    guides: guideData
+                }));
+                connectionStatus = 'connected';
+                if (payload.updatedAt) {
+                    const revDateEl = document.getElementById('last-revision-date');
+                    if (revDateEl) revDateEl.innerText = String(payload.updatedAt).slice(0, 10);
+                }
+            } catch (e) {
+                connectionStatus = 'offline';
+                applyLocalFallback();
+            }
+            updateConnectionStatus();
+            initDashboard();
+        }
+
+        function startPolling() {
+            if (pollTimerId) clearInterval(pollTimerId);
+            pollTimerId = null;
+            const url = (dataConfig.jsonUrl || '').trim();
+            if (url && dataConfig.pollIntervalMs > 0) {
+                pollTimerId = setInterval(() => loadRemoteData(false), dataConfig.pollIntervalMs);
+            }
+        }
+
+        function exportShareJson() {
+            if (!isAdminMode) {
+                alert('관리자 모드에서만 공유용 JSON을 보낼 수 있습니다.');
+                return;
+            }
+            const latestDate = rawData.length > 0 ? rawData[rawData.length - 1].date : new Date().toISOString().slice(0, 7);
+            const payload = {
+                version: latestDate.replace('-', '.'),
+                updatedAt: new Date().toISOString(),
+                db: rawData,
+                guides: guideData
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'hec-data.json';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            alert('hec-data.json 파일이 다운로드되었습니다. SharePoint에 업로드하세요.');
+        }
+
+        function applyUserModeUI() {
+            const rawTab = document.getElementById('tab-rawdata');
+            const exportBtn = document.getElementById('btn-export-share-json');
+            if (rawTab) {
+                if (isAdminMode) rawTab.classList.remove('hidden');
+                else {
+                    rawTab.classList.add('hidden');
+                    const content = document.getElementById('content-rawdata');
+                    if (content && !content.classList.contains('hidden')) switchTab('dashboard');
+                }
+            }
+            if (exportBtn) exportBtn.classList.toggle('hidden', !isAdminMode);
+        }
+
+        function initDashboard() {
+            updateOverviewCards();
+            populateSelectorDropdowns();
+            renderCategoryCheckboxes();
+            renderTrendsChart();
+            renderDataTable();
+            renderMasterEditSheet();
+            renderGuideCards();
+        }
+
+        // 16가지 카테고리별 요약 카드 최신 고시값 및 등락폭 세팅
+        function updateOverviewCards() {
+            if(rawData.length < 2) return;
+            const current = rawData[rawData.length - 1];
+            const previous = rawData[rawData.length - 2];
+
+            Object.keys(indicatorMeta).forEach(key => {
+                const cVal = current[key];
+                const pVal = previous[key];
+                
+                if (cVal === undefined || pVal === undefined) return;
+
+                // 상단 카드 절대값 주입
+                let unit = '';
+                if(key === 'rmc' || key === 'st' || key === 'basic_ground' || key === 'basic_under' || key === 'standard_cost' || key === 'wage_normal') {
+                    unit = ' 원';
+                } else if(key === 'oil_brent' || key === 'oil_dubai') {
+                    unit = ' $';
+                } else if(key === 'lme_al' || key === 'lme_cu') {
+                    unit = ' $';
+                }
+
+                const topEl = document.getElementById(`top-${key}`);
+                if(topEl) {
+                    topEl.innerText = cVal.toLocaleString() + unit;
+                }
+
+                // 변동률 배지 계산
+                const change = cVal - pVal;
+                const percent = ((change / pVal) * 100).toFixed(2);
+                const pctEl = document.getElementById(`pct-${key}`);
+
+                if(pctEl) {
+                    if(change > 0) {
+                        pctEl.className = "text-[9px] font-bold text-red-500 flex items-center gap-0.5";
+                        pctEl.innerHTML = `<i data-lucide="trending-up" class="w-2.5 h-2.5"></i> +${percent}%`;
+                    } else if(change < 0) {
+                        pctEl.className = "text-[9px] font-bold text-blue-500 flex items-center gap-0.5";
+                        pctEl.innerHTML = `<i data-lucide="trending-down" class="w-2.5 h-2.5"></i> ${percent}%`;
+                    } else {
+                        pctEl.className = "text-[9px] font-bold text-slate-400";
+                        pctEl.innerText = `Steady`;
+                    }
+                }
+            });
+            lucide.createIcons();
+        }
+
+        function populateSelectorDropdowns() {
+            const startSelect = document.getElementById('sim-start-date');
+            const endSelect = document.getElementById('sim-end-date');
+            const delSelect = document.getElementById('delete-target-date');
+
+            if (startSelect) startSelect.innerHTML = '';
+            if (endSelect) endSelect.innerHTML = '';
+            if (delSelect) delSelect.innerHTML = '';
+
+            rawData.forEach((item) => {
+                if (startSelect) startSelect.add(new Option(item.date, item.date));
+                if (endSelect) endSelect.add(new Option(item.date, item.date));
+                if (delSelect) delSelect.add(new Option(item.date, item.date));
+            });
+
+            if(rawData.length > 0) {
+                if (startSelect) startSelect.selectedIndex = 0;
+                if (endSelect) endSelect.selectedIndex = rawData.length - 1;
+            }
+            calculateEscalation();
+        }
+
+        // 공사비 보정 시뮬레이터 연산
+        function calculateEscalation() {
+            const indexKey = document.getElementById('sim-indicator').value;
+            const startDate = document.getElementById('sim-start-date').value;
+            const endDate = document.getElementById('sim-end-date').value;
+            const unitPrice = parseFloat(document.getElementById('sim-unit-price').value) || 0;
+            const area = parseFloat(document.getElementById('sim-area').value) || 0;
+
+            const startItem = rawData.find(d => d.date === startDate);
+            const endItem = rawData.find(d => d.date === endDate);
+
+            if(!startItem || !endItem) return;
+
+            const startVal = startItem[indexKey];
+            const endVal = endItem[indexKey];
+
+            const growthRate = ((endVal - startVal) / startVal) * 100;
+            const rateResultEl = document.getElementById('sim-rate-result');
+
+            if(growthRate >= 0) {
+                rateResultEl.innerText = `+${growthRate.toFixed(2)}%`;
+                rateResultEl.className = "text-lg font-black text-red-400";
+            } else {
+                rateResultEl.innerText = `${growthRate.toFixed(2)}%`;
+                rateResultEl.className = "text-lg font-black text-blue-400";
+            }
+
+            // 보정 단가 계산
+            const finalUnitPrice = unitPrice * (endVal / startVal);
+            document.getElementById('sim-unit-result').innerText = `${Math.round(finalUnitPrice).toLocaleString()} 원/평`;
+
+            // 총액 보정 계산
+            const totalRow = document.getElementById('sim-total-row');
+            if(area > 0) {
+                if (totalRow) totalRow.classList.remove('hidden');
+                const baseTotal = unitPrice * area;
+                const finalTotal = finalUnitPrice * area;
+                const totalDiff = finalTotal - baseTotal;
+                const totalResultEl = document.getElementById('sim-total-result');
+                if (totalResultEl) totalResultEl.innerText = `${totalDiff >= 0 ? '+' : ''}${Math.round(totalDiff).toLocaleString()} 원`;
+            } else {
+                if (totalRow) totalRow.classList.add('hidden');
+            }
+        }
+
+        // 카테고리별 체크박스 리스트 렌더링
+        function renderCategoryCheckboxes() {
+            const container = document.getElementById('indicator-checkbox-container');
+            if (!container) return;
+            container.innerHTML = '';
+
+            Object.keys(indicatorMeta).forEach(key => {
+                const meta = indicatorMeta[key];
+                
+                // 카테고리 필터링
+                if(activeCategory !== 'all' && meta.category !== activeCategory) return;
+
+                const label = document.createElement('label');
+                label.className = "inline-flex items-center gap-1.5 cursor-pointer bg-slate-50 px-2.5 py-2 sm:py-1 rounded-lg border border-slate-200/60 hover:bg-slate-100 transition-colors touch-target";
+                
+                const isChecked = selectedIndicators.includes(key) ? 'checked' : '';
+                
+                label.innerHTML = `
+                    <input type="checkbox" value="${key}" ${isChecked} onchange="handleCheckboxChange(this)" class="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 sm:w-3.5 sm:h-3.5">
+                    <span style="color: ${meta.color}" class="font-extrabold">${meta.title}</span>
+                `;
+                container.appendChild(label);
+            });
+        }
+
+        function handleCheckboxChange(checkbox) {
+            const val = checkbox.value;
+            if(checkbox.checked) {
+                if(!selectedIndicators.includes(val)) selectedIndicators.push(val);
+            } else {
+                selectedIndicators = selectedIndicators.filter(v => v !== val);
+            }
+            updateTrendsChart();
+            renderDataTable();
+        }
+
+        function changeCategory(catId) {
+            activeCategory = catId;
+            document.querySelectorAll('.cat-btn').forEach(btn => {
+                btn.className = "cat-btn px-3 py-1.5 rounded-lg text-xs font-bold text-slate-500 bg-slate-100 shrink-0";
+            });
+            const activeBtn = document.getElementById(`btn-cat-${catId}`);
+            if (activeBtn) activeBtn.className = "cat-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 text-white shrink-0";
+            
+            renderCategoryCheckboxes();
+        }
+
+        // 2021-01 기점 100 기준 지수화 연산 적용한 실시간 멀티 라인 그래프 렌더링 (점이 없는 선그래프 실현)
+        function renderTrendsChart() {
+            const chartCanvas = document.getElementById('trendsChart');
+            if (!chartCanvas) return;
+            const ctx = chartCanvas.getContext('2d');
+            const normalizeToggle = document.getElementById('normalize-toggle');
+            const normalize = normalizeToggle ? normalizeToggle.checked : true;
+            
+            const dates = rawData.map(d => d.date);
+
+            if(trendsChartInstance) trendsChartInstance.destroy();
+
+            // 체크된 지표가 없는 경우 빈 데이터로 차트 갱신
+            if(selectedIndicators.length === 0) {
+                trendsChartInstance = new Chart(ctx, { type: 'line', data: { labels: dates, datasets: [] } });
+                return;
+            }
+
+            // 기점(2021-01)의 원장 인덱스 찾기
+            const baseIndex = 0; // 최선인 2021-01이 맨앞에 배치됨
+
+            const datasets = selectedIndicators.map(key => {
+                const meta = indicatorMeta[key];
+                let values = rawData.map(d => d[key]);
+
+                // 2021-01 기점으로 100 환산(Normalize) 연산
+                if(normalize) {
+                    const baseValue = rawData[baseIndex]?.[key] || 1;
+                    values = values.map(v => parseFloat(((v / baseValue) * 100).toFixed(2)));
+                }
+
+                return {
+                    label: meta.title,
+                    data: values,
+                    borderColor: meta.color,
+                    borderWidth: 2.5,
+                    fill: false,
+                    tension: 0.1,
+                    pointRadius: 0, // 평소 표식 점 제거 완료
+                    pointHoverRadius: 5, // 호버시에만 점 활성화
+                    pointHitRadius: 10
+                };
+            });
+
+            const isMobile = window.innerWidth < 640;
+            const isTablet = window.innerWidth >= 640 && window.innerWidth < 1024;
+            const tickSize = isMobile ? 8 : (isTablet ? 9 : 10);
+            const legendSize = isMobile ? 8 : 10;
+
+            trendsChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'nearest', axis: 'x', intersect: false },
+                    plugins: {
+                        legend: {
+                            display: datasets.length <= (isMobile ? 3 : 6),
+                            position: 'top',
+                            labels: { boxWidth: isMobile ? 8 : 12, font: { size: legendSize, weight: 'bold' }, padding: isMobile ? 6 : 10 }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            bodyFont: { weight: 'bold', size: isMobile ? 10 : 11 },
+                            titleFont: { size: isMobile ? 10 : 11 }
+                        }
+                    },
+                    scales: {
+                        y: { 
+                            grid: { color: '#f1f5f9' }, 
+                            ticks: { font: { weight: 'bold', size: tickSize }, maxTicksLimit: isMobile ? 5 : 8 },
+                            title: { display: normalize && !isMobile, text: '상승 지수 (21.01 = 100)', font: { size: tickSize, weight: 'bold' } }
+                        },
+                        x: { 
+                            grid: { display: false }, 
+                            ticks: { font: { weight: 'bold', size: tickSize }, maxTicksLimit: isMobile ? 6 : (isTablet ? 10 : 14), autoSkip: true }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateTrendsChart() {
+            renderTrendsChart();
+        }
+
+        // 선택 지표 확정 수치 테이블 실시간 동기화 출력
+        function renderDataTable() {
+            const headerRow = document.getElementById('table-header-row');
+            const tbody = document.getElementById('table-body-rows');
+            if (!headerRow || !tbody) return;
+            
+            headerRow.innerHTML = '';
+            tbody.innerHTML = '';
+
+            if (selectedIndicators.length === 0) {
+                headerRow.innerHTML = '<th class="px-4 py-2 text-center text-slate-400">선택된 지표가 없습니다.</th>';
+                return;
+            }
+
+            // 헤더 바인딩
+            headerRow.innerHTML = '<th class="px-4 py-2 text-center min-w-[80px]">조회월</th>';
+            selectedIndicators.forEach(key => {
+                const meta = indicatorMeta[key];
+                const th = document.createElement('th');
+                th.className = "px-4 py-2 text-right";
+                th.style.color = meta.color;
+                th.innerText = meta.title;
+                headerRow.appendChild(th);
+            });
+
+            // 최신 고시월 순서로 시계열 바인딩
+            for (let i = rawData.length - 1; i >= 0; i--) {
+                const row = rawData[i];
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors text-slate-700 text-center";
+                
+                // 조회월
+                let tdHtml = `<td class="px-4 py-2 font-bold border-r border-slate-100">${row.date}</td>`;
+                
+                // 개별 선택지표 수치 바인딩
+                selectedIndicators.forEach(key => {
+                    const cVal = row[key];
+                    tdHtml += `<td class="px-4 py-2 text-right font-extrabold text-slate-900">${cVal !== undefined ? cVal.toLocaleString() : '-'}</td>`;
+                });
+
+                tr.innerHTML = tdHtml;
+                tbody.appendChild(tr);
+            }
+        }
+
+        // TAB 2: 원시 데이터 편집 테이블 실시간 그리기
+        function renderMasterEditSheet() {
+            const tbody = document.getElementById('master-sheet-body');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            // 최신 고시순으로 그리드 표기
+            for (let i = rawData.length - 1; i >= 0; i--) {
+                const row = rawData[i];
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors border-b border-slate-100";
+
+                let tds = `<td class="px-2 py-2 font-black text-slate-800">${row.date}</td>`;
+                
+                // 16대 지표 열 바인딩
+                Object.keys(indicatorMeta).forEach(key => {
+                    const val = row[key] !== undefined ? row[key] : '';
+                    tds += `
+                        <td class="px-1 py-1">
+                            <input type="number" step="any" value="${val}" 
+                                   onchange="updateRawDataValue('${row.date}', '${key}', this.value)"
+                                   ${!isAdminMode ? 'disabled' : ''} 
+                                   class="w-full bg-transparent text-center border-0 focus:ring-1 focus:ring-blue-500 rounded p-1 text-[11px] font-extrabold text-slate-900 focus:bg-white focus:border">
+                        </td>
+                    `;
+                });
+
+                // 관리자 제어 영역
+                if(isAdminMode) {
+                    tds += `
+                        <td class="px-2 py-2 text-center">
+                            <button onclick="deleteRowDirect('${row.date}')" class="text-red-500 hover:text-red-700 font-bold text-xs">삭제</button>
+                        </td>
+                    `;
+                } else {
+                    tds += `<td class="px-2 py-2 hidden"></td>`;
+                }
+
+                tr.innerHTML = tds;
+                tbody.appendChild(tr);
+            }
+
+            // 헤더 및 제어 버튼 관리자 모드 감응
+            const actionHeader = document.getElementById('th-action-header');
+            const bulkDeleteBtn = document.getElementById('btn-bulk-delete');
+            const addRowForm = document.getElementById('admin-add-row-form');
+            const adminNotice = document.getElementById('admin-notice-bar');
+
+            if(isAdminMode) {
+                if (actionHeader) actionHeader.classList.remove('hidden');
+                if (bulkDeleteBtn) bulkDeleteBtn.classList.remove('hidden');
+                if (addRowForm) addRowForm.classList.remove('hidden');
+                if (adminNotice) adminNotice.classList.add('hidden');
+            } else {
+                if (actionHeader) actionHeader.classList.add('hidden');
+                if (bulkDeleteBtn) bulkDeleteBtn.classList.add('hidden');
+                if (addRowForm) addRowForm.classList.add('hidden');
+                if (adminNotice) adminNotice.classList.remove('hidden');
+            }
+        }
+
+        // 시트값 인라인 에디팅 기능
+        function updateRawDataValue(date, key, newVal) {
+            const index = rawData.findIndex(d => d.date === date);
+            if(index >= 0) {
+                rawData[index][key] = parseFloat(newVal) || 0;
+                localStorage.setItem('hec_master_db', JSON.stringify(rawData));
+                updateOverviewCards();
+                calculateEscalation();
+            }
+        }
+
+        // 신규 고시 행 추가
+        function addRawDataRow() {
+            const dateInput = document.getElementById('add-date');
+            const targetDate = dateInput ? dateInput.value.trim() : '';
+            if(!/^\d{4}-\d{2}$/.test(targetDate)) {
+                alert("년월 포맷은 YYYY-MM 형태로 정확하게 입력해 주세요. (예: 2026-06)");
+                return;
+            }
+
+            if(rawData.some(d => d.date === targetDate)) {
+                alert("이미 해당 년월 데이터가 원장에 존재합니다. 기존 시트에서 직접 값을 수정하십시오.");
+                return;
+            }
+
+            const newRow = { date: targetDate };
+            Object.keys(indicatorMeta).forEach(key => {
+                const el = document.getElementById(`add-${key}`);
+                const inputVal = el ? parseFloat(el.value) : NaN;
+                newRow[key] = !isNaN(inputVal) ? inputVal : 0;
+            });
+
+            rawData.push(newRow);
+            rawData.sort((a,b) => a.date.localeCompare(b.date));
+            
+            // 추가 폼 초기화
+            Object.keys(indicatorMeta).forEach(key => {
+                const el = document.getElementById(`add-${key}`);
+                if (el) el.value = '';
+            });
+            if (dateInput) dateInput.value = '';
+
+            alert(`${targetDate} 새로운 월간 고시 데이터가 원장에 편입되었습니다.`);
+            saveAndRefresh();
+        }
+
+        function deleteRowDirect(date) {
+            if(confirm(`${date} 원장 데이터를 영구 삭제하시겠습니까?`)) {
+                rawData = rawData.filter(d => d.date !== date);
+                saveAndRefresh();
+            }
+        }
+
+        function deleteAllDataConfirm() {
+            if(confirm("주의: 저장된 16가지의 물가지표 원장 정보가 완전히 소멸됩니다. 초기화하시겠습니까?")) {
+                rawData = [];
+                saveAndRefresh();
+            }
+        }
+
+        // CSV 백업 파일 내보내기 (Export)
+        function downloadBackupCSV() {
+            let csvContent = "\ufeffdate,cci_house,cci_nonhouse,cpi,ppi,rmc,st,lme_al,lme_cu,oil_brent,oil_dubai,fx_usd,fx_eur,basic_ground,basic_under,standard_cost,wage_normal\n";
+            
+            rawData.forEach(row => {
+                const line = [
+                    row.date,
+                    row.cci_house || 0,
+                    row.cci_nonhouse || 0,
+                    row.cpi || 0,
+                    row.ppi || 0,
+                    row.rmc || 0,
+                    row.st || 0,
+                    row.lme_al || 0,
+                    row.lme_cu || 0,
+                    row.oil_brent || 0,
+                    row.oil_dubai || 0,
+                    row.fx_usd || 0,
+                    row.fx_eur || 0,
+                    row.basic_ground || 0,
+                    row.basic_under || 0,
+                    row.standard_cost || 0,
+                    row.wage_normal || 0
+                ].join(',');
+                csvContent += line + "\n";
+            });
+
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute("download", `HEC_물가모니터링_마스터원장_백업.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // CSV 백업 데이터 일괄 로드 및 동기화 (Import)
+        function importBackupCSV(event) {
+            const file = event.target.files[0];
+            if(!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const lines = text.split('\n');
+                const loadedData = [];
+
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if(!line) continue;
+                    const items = line.split(',');
+                    
+                    if(items.length >= 17) {
+                        loadedData.push({
+                            date: items[0].trim(),
+                            cci_house: parseFloat(items[1]) || 0,
+                            cci_nonhouse: parseFloat(items[2]) || 0,
+                            cpi: parseFloat(items[3]) || 0,
+                            ppi: parseFloat(items[4]) || 0,
+                            rmc: parseFloat(items[5]) || 0,
+                            st: parseFloat(items[6]) || 0,
+                            lme_al: parseFloat(items[7]) || 0,
+                            lme_cu: parseFloat(items[8]) || 0,
+                            oil_brent: parseFloat(items[9]) || 0,
+                            oil_dubai: parseFloat(items[10]) || 0,
+                            fx_usd: parseFloat(items[11]) || 0,
+                            fx_eur: parseFloat(items[12]) || 0,
+                            basic_ground: parseFloat(items[13]) || 0,
+                            basic_under: parseFloat(items[14]) || 0,
+                            standard_cost: parseFloat(items[15]) || 0,
+                            wage_normal: parseFloat(items[16]) || 0
+                        });
+                    }
+                }
+
+                if(loadedData.length > 0) {
+                    rawData = loadedData;
+                    rawData.sort((a,b) => a.date.localeCompare(b.date));
+                    alert(`백업 복원 완료: 총 ${loadedData.length}개월의 공식 지표 정보가 로드되어 병합되었습니다.`);
+                    saveAndRefresh();
+                } else {
+                    alert("가져온 CSV 파일의 형식이 대시보드 규격에 맞지 않습니다.");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // 지표 설명 가이드 구성
+        function renderGuideCards() {
+            const container = document.getElementById('guide-container');
+            if (!container) return;
+            container.innerHTML = '';
+
+            Object.keys(guideData).forEach(key => {
+                const data = guideData[key];
+                const card = document.createElement('div');
+                card.className = "bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-2 flex flex-col justify-between";
+
+                // 공인 행정규칙 및 출처 아웃링크 매핑
+                let externalHref = 'https://www.law.go.kr/';
+                if (key === 'basic_ground' || key === 'basic_under') {
+                    externalHref = 'https://www.law.go.kr/법령/공동주택분양가격의산정등에관한규칙';
+                } else if (key === 'standard_cost') {
+                    externalHref = 'https://www.law.go.kr/법령/공공주택특별법시행규칙';
+                } else if (key === 'cci_house' || key === 'cci_nonhouse') {
+                    externalHref = 'https://cost.kict.re.kr/';
+                } else if (key === 'cpi') {
+                    externalHref = 'https://ecos.bok.or.kr/';
+                } else if (key === 'ppi') {
+                    externalHref = 'https://ecos.bok.or.kr/';
+                } else if (key === 'oil_brent' || key === 'oil_dubai') {
+                    externalHref = 'https://www.opinet.co.kr/';
+                } else if (key === 'rmc') {
+                    externalHref = 'https://www.kppa.or.kr/';
+                } else if (key === 'st') {
+                    externalHref = 'https://www.cak.or.kr/';
+                } else if (key === 'lme_al' || key === 'lme_cu') {
+                    externalHref = 'https://www.lme.com/';
+                }
+
+                if(!isAdminMode) {
+                    card.innerHTML = `
+                        <div>
+                            <h4 class="font-bold text-slate-800 text-sm flex items-center justify-between">
+                                <span class="flex items-center gap-1.5"><span class="w-1.5 h-3.5 bg-blue-600 rounded-full inline-block"></span> ${data.title}</span>
+                                <a href="${externalHref}" target="_blank" class="text-xs text-blue-500 hover:underline flex items-center gap-0.5 font-bold">공식 고시처 <i data-lucide="external-link" class="w-3 h-3"></i></a>
+                            </h4>
+                            <p class="text-xs text-slate-600 leading-relaxed pt-2">${data.desc}</p>
+                        </div>
+                    `;
+                } else {
+                    card.innerHTML = `
+                        <div class="space-y-2">
+                            <h4 class="font-bold text-amber-800 text-sm flex items-center justify-between">
+                                <span class="flex items-center gap-1.5"><span class="w-1.5 h-3.5 bg-amber-500 rounded-full inline-block"></span> ${data.title}</span>
+                                <a href="${externalHref}" target="_blank" class="text-xs text-amber-600 hover:underline flex items-center gap-0.5 font-bold">공식 고시처 <i data-lucide="external-link" class="w-3 h-3"></i></a>
+                            </h4>
+                            <textarea id="guide-edit-${key}" class="w-full p-2.5 text-xs border border-slate-300 rounded-xl bg-white h-24 focus:ring-1 focus:ring-amber-500 focus:outline-none">${data.desc}</textarea>
+                        </div>
+                        <button onclick="saveGuideDesc('${key}')" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg transition-colors mt-2 self-start">가이드 수정 저장</button>
+                    `;
+                }
+                container.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        function saveGuideDesc(key) {
+            const el = document.getElementById(`guide-edit-${key}`);
+            const descText = el ? el.value : '';
+            guideData[key].desc = descText;
+            localStorage.setItem('hec_master_guides', JSON.stringify(guideData));
+            alert("지표 해설 및 규정이 실시간 업데이트되었습니다.");
+            renderGuideCards();
+        }
+
+        // CSV 파일 정밀 수동 업로드 (기존 업로드 기능도 보전 유지)
+        function handleCsvUpload(event) {
+            const file = event.target.files[0];
+            if(!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const rows = text.split('\n');
+                let mergedCount = 0;
+
+                for(let i = 1; i < rows.length; i++) {
+                    const line = rows[i].trim();
+                    if(!line) continue;
+                    const items = line.split(',');
+                    
+                    if(items.length >= 17) {
+                        const rowDataObj = {
+                            date: items[0].trim(),
+                            cci_house: parseFloat(items[1]) || 0,
+                            cci_nonhouse: parseFloat(items[2]) || 0,
+                            cpi: parseFloat(items[3]) || 0,
+                            ppi: parseFloat(items[4]) || 0,
+                            rmc: parseFloat(items[5]) || 0,
+                            st: parseFloat(items[6]) || 0,
+                            lme_al: parseFloat(items[7]) || 0,
+                            lme_cu: parseFloat(items[8]) || 0,
+                            oil_brent: parseFloat(items[9]) || 0,
+                            oil_dubai: parseFloat(items[10]) || 0,
+                            fx_usd: parseFloat(items[11]) || 0,
+                            fx_eur: parseFloat(items[12]) || 0,
+                            basic_ground: parseFloat(items[13]) || 0,
+                            basic_under: parseFloat(items[14]) || 0,
+                            standard_cost: parseFloat(items[15]) || 0,
+                            wage_normal: parseFloat(items[16]) || 0
+                        };
+
+                        const index = rawData.findIndex(d => d.date === rowDataObj.date);
+                        if(index >= 0) {
+                            rawData[index] = rowDataObj;
+                        } else {
+                            rawData.push(rowDataObj);
+                        }
+                        mergedCount++;
+                    }
+                }
+                rawData.sort((a,b) => a.date.localeCompare(b.date));
+                alert(`CSV 병합 성공: 총 ${mergedCount}개월 분량의 지표 원장이 갱신/추가되었습니다.`);
+                saveAndRefresh();
+            };
+            reader.readAsText(file);
+        }
+
+        // 국책 API 모의 스케줄러 동기화
+        function triggerApiSync() {
+            alert("공사비원가관리센터(KICT), 한국은행 ECOS, 통계청 고시 API 자동 수집 모의 파이프라인을 기동합니다.");
+            const currentLast = rawData[rawData.length - 1];
+            const nextDate = "2026-06";
+            
+            if(rawData.some(d => d.date === nextDate)) {
+                alert("이미 모든 고시 지표 정보가 최신 상태입니다.");
+                return;
+            }
+
+            rawData.push({
+                date: nextDate,
+                cci_house: parseFloat((currentLast.cci_house * 1.002).toFixed(2)),
+                cci_nonhouse: parseFloat((currentLast.cci_nonhouse * 1.003).toFixed(2)),
+                cpi: parseFloat((currentLast.cpi * 1.001).toFixed(2)),
+                ppi: parseFloat((currentLast.ppi * 1.001).toFixed(2)),
+                rmc: currentLast.rmc,
+                st: parseFloat((currentLast.st * 1.005).toFixed(0)),
+                lme_al: Math.round(currentLast.lme_al * 1.008),
+                lme_cu: Math.round(currentLast.lme_cu * 1.006),
+                oil_brent: parseFloat((currentLast.oil_brent * 1.012).toFixed(1)),
+                oil_dubai: parseFloat((currentLast.oil_dubai * 1.011).toFixed(1)),
+                fx_usd: parseFloat((currentLast.fx_usd * 1.003).toFixed(1)),
+                fx_eur: parseFloat((currentLast.fx_eur * 1.002).toFixed(1)),
+                basic_ground: currentLast.basic_ground,
+                basic_under: currentLast.basic_under,
+                standard_cost: currentLast.standard_cost,
+                wage_normal: currentLast.wage_normal
+            });
+
+            alert("동기화 가동 성공: 2026-06 가상 잠정 고시 데이터가 안전하게 수록되었습니다.");
+            saveAndRefresh();
+        }
+
+        // UI 탭 전환 제어
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('content-dashboard').classList.add('hidden');
+            document.getElementById('content-rawdata').classList.add('hidden');
+            document.getElementById('content-guide').classList.add('hidden');
+
+            const tabEl = document.getElementById(`tab-${tabId}`);
+            if (tabEl) tabEl.classList.add('active');
+            const contentEl = document.getElementById(`content-${tabId}`);
+            if (contentEl) contentEl.classList.remove('hidden');
+        }
+
+        function setAdminBtnText(loggedIn) {
+            const btnText = document.getElementById('admin-btn-text');
+            if (!btnText) return;
+            if (loggedIn) {
+                btnText.innerHTML = '<span class="sm:hidden">로그아웃</span><span class="hidden sm:inline">관리자 권한 로그아웃</span>';
+            } else {
+                btnText.innerHTML = '<span class="sm:hidden">관리자</span><span class="hidden sm:inline">관리자 권한 인증</span>';
+            }
+        }
+
+        function toggleAdminMode() {
+            if(!isAdminMode) {
+                const password = prompt("사내 관리자 승인 비밀번호를 입력해 주십시오.");
+                if(password === 'admin1234') {
+                    isAdminMode = true;
+                    setAdminBtnText(true);
+                    applyUserModeUI();
+                    initDashboard();
+                } else if(password !== null) {
+                    alert("비밀번호가 일치하지 않습니다.");
+                }
+            } else {
+                isAdminMode = false;
+                setAdminBtnText(false);
+                applyUserModeUI();
+                initDashboard();
+            }
+        }
+
+        function saveAndRefresh() {
+            localStorage.setItem('hec_master_db', JSON.stringify(rawData));
+            localStorage.setItem('hec_master_guides', JSON.stringify(guideData));
+            const latestDate = rawData.length > 0 ? rawData[rawData.length - 1].date : new Date().toISOString().slice(0, 7);
+            localStorage.setItem(DATA_CACHE_KEY, JSON.stringify({
+                version: latestDate.replace('-', '.'),
+                updatedAt: new Date().toISOString(),
+                db: rawData,
+                guides: guideData
+            }));
+            const revDateEl = document.getElementById('last-revision-date');
+            if (revDateEl) revDateEl.innerText = new Date().toISOString().slice(0, 10);
+            initDashboard();
+        }
+
+        function formatAndCalcUnitPrice(input) {
+            let value = input.value.replace(/,/g, '');
+            if(!isNaN(value) && value !== "") {
+                input.value = Number(value).toLocaleString();
+                const unitPriceEl = document.getElementById('sim-unit-price');
+                if (unitPriceEl) unitPriceEl.value = value;
+            } else {
+                const unitPriceEl = document.getElementById('sim-unit-price');
+                if (unitPriceEl) unitPriceEl.value = 0;
+            }
+            calculateEscalation();
+        }
+
+        function formatAndCalcArea(input) {
+            let value = input.value.replace(/,/g, '');
+            if(!isNaN(value) && value !== "") {
+                input.value = Number(value).toLocaleString();
+                const areaEl = document.getElementById('sim-area');
+                if (areaEl) areaEl.value = value;
+            } else {
+                const areaEl = document.getElementById('sim-area');
+                if (areaEl) areaEl.value = 0;
+            }
+            calculateEscalation();
+        }
+
+        function downloadReport() {
+            const container = document.getElementById('capture-area');
+            if (!container) return;
+            html2canvas(container, { scale: 2, useCORS: true, backgroundColor: "#0f172a" }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `HEC_에스컬레이션_분석보고서.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+        }
+    </script>
+</body>
+</html>
