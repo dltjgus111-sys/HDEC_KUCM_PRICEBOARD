@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>주요 물가지표 통합 모니터링 및 공사비 시뮬레이터</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,14 +31,23 @@
             --brown: #5A3A00;
             --line: rgba(0, 0, 0, .08);
             --shadow: 0 18px 46px rgba(0, 0, 0, .12);
-            --content: min(1360px, calc(100vw - 56px));
+            --page-gutter: 28px;
+            --safe-left: env(safe-area-inset-left, 0px);
+            --safe-right: env(safe-area-inset-right, 0px);
+            --content: min(1360px, calc(100vw - var(--page-gutter) * 2 - var(--safe-left) - var(--safe-right)));
         }
 
         * { box-sizing: border-box; }
 
+        html {
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+        }
+
         body {
             margin: 0;
             color: var(--text);
+            overflow-x: hidden;
             background-color: var(--bg);
             background-image:
                 linear-gradient(to right, var(--grid) 1px, transparent 1px),
@@ -1267,6 +1276,223 @@
             text-decoration: none;
         }
         .indicator-modal-source-wrap a:hover { text-decoration: underline; }
+
+        /* ── Responsive: phone · tablet (Galaxy / iPhone / Tab / iPad) ── */
+        @media (max-width: 1023px) {
+            :root { --page-gutter: 20px; }
+
+            .dashboard-chart-sim-grid {
+                grid-template-columns: 1fr !important;
+            }
+            .chart-panel,
+            .simulator-panel {
+                width: 100%;
+                min-width: 0;
+            }
+            .chart-canvas-area {
+                min-height: 300px;
+                height: 300px;
+            }
+            .chart-select-group {
+                grid-template-columns: 68px repeat(4, minmax(0, 1fr));
+            }
+            .chart-btn {
+                font-size: 8.5px;
+                min-height: 38px;
+                padding: 5px 2px;
+            }
+            .sim-results-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+            .sim-compare-rate { font-size: 14px; }
+            .sim-compare-cost { font-size: 10px; }
+        }
+
+        @media (max-width: 767px) {
+            :root { --page-gutter: 14px; }
+
+            .topbar {
+                top: 8px;
+                margin-top: 8px;
+                gap: 8px;
+            }
+            .brand-chip {
+                padding: 8px 12px;
+                max-width: 100%;
+            }
+            .brand-chip strong {
+                font-size: 12px;
+                line-height: 1.35;
+            }
+            .meta-chip {
+                padding: 8px 10px;
+                font-size: 11px;
+            }
+            .tab-bar {
+                margin-top: 8px;
+                padding: 4px;
+                gap: 4px;
+                border-radius: 16px;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            .tab-btn {
+                padding: 10px 10px;
+                font-size: 11px;
+                white-space: nowrap;
+                flex: 1 1 auto;
+                min-width: 0;
+            }
+            .page-shell {
+                padding-top: 14px;
+                padding-bottom: 28px;
+            }
+            .dashboard-section-head {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+            .view-month-bar {
+                justify-content: space-between;
+                width: 100%;
+            }
+            .section-heading-with-icon {
+                font-size: 16px;
+            }
+            .panel.p-6 { padding: 14px !important; }
+            .simulator-panel { padding: 16px; }
+            .chart-head-row { flex-direction: column; gap: 8px; }
+            .chart-head-right {
+                max-width: 100%;
+                align-items: flex-start;
+                width: 100%;
+            }
+            .chart-note { text-align: left; }
+            .chart-controls {
+                justify-content: flex-start;
+                width: 100%;
+            }
+            .chart-base-select select { max-width: none; flex: 1; }
+            .chart-select-group {
+                grid-template-columns: 1fr 1fr;
+                gap: 6px;
+            }
+            .chart-select-group .group-label {
+                grid-column: 1 / -1;
+                padding: 8px 10px;
+                font-size: 11px;
+            }
+            .chart-btn {
+                min-height: 40px;
+                font-size: 9px;
+            }
+            .chart-canvas-area {
+                min-height: 260px;
+                height: 260px;
+            }
+            .sim-results-grid {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            .sim-compare-block {
+                padding: 8px 4px;
+            }
+            .sim-compare-block + .sim-compare-block {
+                border-left: none;
+                border-top: 1px solid rgba(255, 255, 255, .22);
+                padding-top: 10px;
+            }
+            .sim-compare-block.sim-compare-avg {
+                margin-top: 2px;
+            }
+            .sim-compare-name {
+                min-height: auto;
+                font-size: 10px;
+            }
+            .sim-compare-rate { font-size: 18px; }
+            .sim-compare-cost { font-size: 12px; }
+            .chart-sim-save-row {
+                justify-content: stretch;
+            }
+            .chart-sim-save-row .btn-download {
+                width: 100%;
+            }
+            .category-row {
+                grid-template-columns: 1fr 1fr;
+            }
+            .indicator-card {
+                min-height: 64px;
+                padding: 8px 10px;
+            }
+            .indicator-card .card-val {
+                font-size: 14px;
+                white-space: normal;
+            }
+            .indicator-card .card-changes {
+                font-size: 8px;
+            }
+            .footer-sources {
+                white-space: normal;
+                overflow-x: visible;
+            }
+            .footer-source-block {
+                display: block;
+                margin-bottom: 4px;
+                white-space: normal;
+            }
+            .footer-source-sep { display: none; }
+            .indicator-modal {
+                padding: 12px;
+                align-items: flex-end;
+            }
+            .indicator-modal-panel {
+                width: 100%;
+                max-height: 88vh;
+                border-radius: 18px 18px 0 0;
+            }
+        }
+
+        @media (max-width: 480px) {
+            :root { --page-gutter: 10px; }
+
+            .brand-chip .badge { font-size: 10px; padding: 3px 6px; }
+            .brand-chip strong { font-size: 11px; }
+            .meta-chip { font-size: 10px; }
+            .tab-btn { font-size: 10px; padding: 9px 8px; }
+            .category-row {
+                grid-template-columns: 1fr;
+            }
+            .chart-select-group {
+                grid-template-columns: 1fr;
+            }
+            .chart-btn {
+                min-height: 38px;
+                font-size: 10px;
+            }
+            .chart-canvas-area {
+                min-height: 220px;
+                height: 220px;
+            }
+            .sim-unit-btns button {
+                font-size: 11px;
+                padding: 7px 8px;
+            }
+            .guide-card h4 { font-size: 14px; }
+            .guide-card p { font-size: 13px; }
+        }
+
+        @media (max-width: 360px) {
+            .tab-btn { font-size: 9px; padding: 8px 6px; }
+            .indicator-card .card-title { font-size: 10px; }
+            .indicator-card .card-val { font-size: 13px; }
+        }
+
+        @media (min-width: 768px) and (max-width: 1023px) {
+            .category-row {
+                grid-template-columns: 72px repeat(2, minmax(0, 1fr));
+            }
+            .category-label { grid-column: 1 / -1; }
+        }
     </style>
 </head>
 <body class="flex flex-col min-h-screen">
@@ -2500,11 +2726,21 @@
             return `<span class="${cls}">${label} ${sign}${pct}%</span>`;
         }
 
+        let chartResizeTimer = null;
+        function handleViewportResize() {
+            clearTimeout(chartResizeTimer);
+            chartResizeTimer = setTimeout(() => {
+                if (chartInstance) chartInstance.resize();
+            }, 120);
+        }
+
         window.onload = function() {
             lucide.createIcons();
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') closeIndicatorHistory();
             });
+            window.addEventListener('resize', handleViewportResize);
+            window.addEventListener('orientationchange', handleViewportResize);
             if (sessionStorage.getItem('hec_authenticated') === 'true') {
                 document.getElementById('login-gate').classList.add('hidden');
                 document.getElementById('main-content').classList.remove('hidden');
@@ -3478,6 +3714,9 @@
                     }
                 }
             });
+            requestAnimationFrame(() => {
+                if (chartInstance) chartInstance.resize();
+            });
         }
 
         function switchTab(tabId) {
@@ -3490,6 +3729,9 @@
             if (tabId === 'data') {
                 renderDataMgmtTable();
                 lucide.createIcons();
+            }
+            if (tabId === 'dashboard') {
+                handleViewportResize();
             }
         }
 
