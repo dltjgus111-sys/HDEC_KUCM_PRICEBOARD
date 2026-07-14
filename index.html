@@ -1960,21 +1960,15 @@
 
                 <!-- Excel / CSV Upload (관리자) -->
                 <section class="data-section hidden" id="data-admin-file-section">
-                    <h4><i data-lucide="upload-cloud" class="w-4 h-4 inline"></i> 데이터 업로드</h4>
+                    <h4><i data-lucide="upload-cloud" class="w-4 h-4 inline"></i> 월별 데이터 CSV 업로드</h4>
                     <p class="text-xs mb-3" style="color: var(--muted);">
-                        아래 <strong>공식 양식</strong>을 내려받아 <strong>UP</strong> 시트 2행부터 입력한 뒤 업로드하세요. (1행 헤더 변경 금지)
+                        회사에서 쓰시는 <strong>월별 지표 CSV를 그대로</strong> 올리면 자동으로 반영·병합됩니다. (별도 양식 맞출 필요 없음)<br>
+                        조건: <strong>맨 앞 열 = 년월</strong>(예: 2026-07), 그 뒤 <strong>16개 지표 값을 대시보드 표와 같은 순서</strong>로.
+                        같은 년월은 덮어쓰기, 없는 값(빈칸)은 유지됩니다. (엑셀 .xlsx도 가능)
                     </p>
-                    <div class="upload-template-bar">
-                        <button type="button" class="btn-data primary" onclick="downloadUploadTemplateXlsx()">
-                            <i data-lucide="download" class="w-3.5 h-3.5 inline"></i> 업로드 양식 (.xlsx) 다운로드
-                        </button>
-                        <button type="button" class="btn-data ghost" onclick="downloadUploadTemplateCsv()">
-                            CSV 양식 다운로드
-                        </button>
-                    </div>
                     <label class="csv-drop block">
                         <i data-lucide="file-spreadsheet" class="w-5 h-5 mx-auto mb-1 opacity-50"></i>
-                        양식 파일 선택하여 업로드 (.xlsx · .csv)
+                        월별 데이터 파일 선택 (.csv · .xlsx)
                         <input type="file" id="csv-file-input" accept=".csv,.xlsx,.xls" class="hidden"
                             onchange="handleFileUpload(event)">
                     </label>
@@ -2699,8 +2693,7 @@ window.addEventListener('error', function(e) {
 
             const onDone = (mergedCount, sheetName) => {
                 if (mergedCount <= 0) {
-                    const sheetHint = sheetName ? `\n• 읽은 시트: 「${sheetName}」(UP 시트 우선)` : '';
-                    alert(`업로드할 유효한 데이터 행을 찾지 못했습니다.${sheetHint}\n\n확인 사항:\n• UP 시트: 1행 헤더 + 2행부터 년월·숫자\n• 년월: 2025-05 / 202505 / 2025.05 형식\n• A열이 비어 있으면 「년월」 헤더 열 기준으로 읽음\n• 헤더 17열 순서: date → 물가지수(4) → 주요자재(4) → 건축비 고시(4) → 기타지표(4)`);
+                    alert(`업로드할 유효한 데이터 행을 찾지 못했습니다.\n\n확인 사항\n• 맨 앞 열이 년월인지 (2026-07 · 202607 · 2026.07 형식)\n• 그 뒤로 16개 지표 값이 대시보드 표와 같은 순서인지\n• 파일이 비어 있거나 헤더만 있지 않은지`);
                 } else {
                     alert(`업로드 완료: 총 ${mergedCount}개월 분량의 지표 원장이 갱신·병합되었습니다.`);
                     saveAndRefresh();
@@ -2711,8 +2704,7 @@ window.addEventListener('error', function(e) {
             if (ext === 'csv') {
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    const rows = parseCsvText(e.target.result);
-                    const mergedCount = ingestUploadRows(rows);
+                    const mergedCount = suIngestMonthlyCsv(String(e.target.result));
                     onDone(mergedCount, 'CSV');
                 };
                 reader.readAsText(file, 'UTF-8');
@@ -2912,7 +2904,8 @@ window.addEventListener('error', function(e) {
             { date: '2026-04', ccpi_res: 134.22, ccpi_nonres: 135.48, cpi: 119.37, gdp_deflator: null, remicon: 108200, rebar: 868000, aluminum: 3583.5, copper: 12270.0, basic_above: 2220000.0, basic_below: 1156000.0, standard_cost: 2392000, standard_labor: 279988, oil_brent: 101.16, oil_dubai: 108.9, fx_usd: 1530.5, fx_eur: 1769.33 },
             { date: '2026-05', ccpi_res: 134.64, ccpi_nonres: 136.18, cpi: 119.92, gdp_deflator: null, remicon: 108200, rebar: 938000, aluminum: 3584.0, copper: 12895.0, basic_above: 2220000.0, basic_below: 1156000.0, standard_cost: 2392000, standard_labor: 279988, oil_brent: 114.44, oil_dubai: 102.84, fx_usd: 1484.8, fx_eur: 1741.97 },
             { date: '2026-06', ccpi_res: null, ccpi_nonres: null, cpi: 119.99, gdp_deflator: null, remicon: 108200, rebar: 958000, aluminum: 3795.5, copper: 13819.0, basic_above: 2220000.0, basic_below: 1156000.0, standard_cost: 2392000, standard_labor: 279988, oil_brent: 96.0, oil_dubai: 92.8, fx_usd: 1503.2, fx_eur: 1752.05 },
-            { date: '2026-07', ccpi_res: null, ccpi_nonres: null, cpi: null, gdp_deflator: null, remicon: 112850, rebar: 978000, aluminum: 3075.0, copper: 13170.0, basic_above: 2220000.0, basic_below: 1156000.0, standard_cost: 2392000, standard_labor: 279988, oil_brent: 71.57, oil_dubai: 66.29, fx_usd: 1548.4, fx_eur: 1768.2 }
+            { date: '2026-07', ccpi_res: null, ccpi_nonres: null, cpi: null, gdp_deflator: null, remicon: 112850, rebar: 978000, aluminum: 3075.0, copper: 13170.0, basic_above: 2220000.0, basic_below: 1156000.0, standard_cost: 2392000, standard_labor: 279988, oil_brent: 71.57, oil_dubai: 66.29, fx_usd: 1548.4, fx_eur: 1768.2 },
+            { date: '2026-09', ccpi_res: null, ccpi_nonres: null, cpi: null, gdp_deflator: null, remicon: null, rebar: null, aluminum: null, copper: null, basic_above: null, basic_below: null, standard_cost: null, standard_labor: null, oil_brent: 123123, oil_dubai: 1231, fx_usd: 123123, fx_eur: 123123 }
         ];
 
         function loadRawData() {
@@ -4558,6 +4551,61 @@ window.addEventListener('error', function(e) {
                 + '<div style="font-size:11px;color:var(--muted);margin-top:2px;">※ 복사가 안 됐다면 위 칸 클릭 → Ctrl+A → Ctrl+C</div>';
             box.classList.remove('hidden');
             box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // ===== Direct monthly-CSV import (admin) =====
+        // Accepts the company's own wide monthly CSV as-is: column 0 = year-month,
+        // columns 1..16 = the 16 indicators in dashboard order. A proper CSV tokenizer
+        // handles quoted / multi-line headers and commas; header & blank rows are
+        // skipped automatically because only rows whose first cell is a valid
+        // year-month are ingested. Encoding-agnostic (values are ASCII).
+        function suParseCSV(text) {
+            text = String(text).replace(/^﻿/, '');
+            const rows = [];
+            let row = [], field = '', inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+                const c = text[i];
+                if (inQuotes) {
+                    if (c === '"') {
+                        if (text[i + 1] === '"') { field += '"'; i++; }
+                        else inQuotes = false;
+                    } else field += c;
+                } else if (c === '"') {
+                    inQuotes = true;
+                } else if (c === ',') {
+                    row.push(field); field = '';
+                } else if (c === '\n') {
+                    row.push(field); rows.push(row); row = []; field = '';
+                } else if (c === '\r') {
+                    /* ignore CR */
+                } else field += c;
+            }
+            row.push(field);
+            rows.push(row);
+            return rows;
+        }
+
+        function suIngestMonthlyCsv(text) {
+            const rows = suParseCSV(text);
+            let merged = 0;
+            rows.forEach(function (cells) {
+                if (!cells || !cells.length) return;
+                const date = normalizeUploadDate(String(cells[0] == null ? '' : cells[0]).trim());
+                if (!date) return;                     // skip header / blank / junk rows
+                const rec = { date: date };
+                let has = false;
+                for (let i = 0; i < INDICATOR_KEYS.length; i++) {
+                    const v = parseUploadNumber(cells[i + 1]);
+                    if (v != null) { rec[INDICATOR_KEYS[i]] = v; has = true; }
+                }
+                if (!has) return;
+                const idx = rawData.findIndex(function (d) { return d.date === date; });
+                if (idx >= 0) rawData[idx] = Object.assign({}, rawData[idx], rec);
+                else rawData.push(rec);
+                merged++;
+            });
+            if (merged > 0) rawData.sort(function (a, b) { return a.date.localeCompare(b.date); });
+            return merged;
         }
 
         function renderGuidePage() {
