@@ -2905,33 +2905,39 @@ window.addEventListener('error', function(e) {
             { date: '2026-05', ccpi_res: 134.64, ccpi_nonres: 136.18, cpi: 119.92, gdp_deflator: null, remicon: 108200, rebar: 938000, aluminum: 3584.0, copper: 12895.0, basic_above: 2220000.0, basic_below: 1156000.0, standard_cost: 2392000, standard_labor: 279988, oil_brent: 114.44, oil_dubai: 102.84, fx_usd: 1484.8, fx_eur: 1741.97 },
             { date: '2026-06', ccpi_res: null, ccpi_nonres: null, cpi: 119.99, gdp_deflator: null, remicon: 108200, rebar: 958000, aluminum: 3795.5, copper: 13819.0, basic_above: 2220000.0, basic_below: 1156000.0, standard_cost: 2392000, standard_labor: 279988, oil_brent: 96.0, oil_dubai: 92.8, fx_usd: 1503.2, fx_eur: 1752.05 },
             { date: '2026-07', ccpi_res: null, ccpi_nonres: null, cpi: null, gdp_deflator: null, remicon: 112850, rebar: 978000, aluminum: 3075.0, copper: 13170.0, basic_above: 2220000.0, basic_below: 1156000.0, standard_cost: 2392000, standard_labor: 279988, oil_brent: 71.57, oil_dubai: 66.29, fx_usd: 1548.4, fx_eur: 1768.2 },
-            { date: '2026-09', ccpi_res: null, ccpi_nonres: null, cpi: null, gdp_deflator: null, remicon: null, rebar: null, aluminum: null, copper: null, basic_above: null, basic_below: null, standard_cost: null, standard_labor: null, oil_brent: 123123, oil_dubai: 1231, fx_usd: 123123, fx_eur: 123123 }
+            { date: '2026-08', ccpi_res: null, ccpi_nonres: null, cpi: null, gdp_deflator: null, remicon: null, rebar: null, aluminum: null, copper: null, basic_above: null, basic_below: null, standard_cost: null, standard_labor: null, oil_brent: 123, oil_dubai: 123123, fx_usd: 123123, fx_eur: 123123 }
         ];
 
+        function suHashStr(s) {
+            let h = 5381;
+            for (let i = 0; i < s.length; i++) { h = ((h << 5) + h + s.charCodeAt(i)) | 0; }
+            return String(h >>> 0);
+        }
+        // Signature of the PUBLISHED dataset baked into this file. It changes whenever the
+        // data array changes (new month / edited value / deletion), so any browser can
+        // detect that a newer file was deployed and drop its stale localStorage copy.
+        const HEC_DATA_SIGNATURE = (function () {
+            try { return suHashStr(JSON.stringify(defaultRawData)); }
+            catch (e) { return 'n' + defaultRawData.length; }
+        })();
+
         function loadRawData() {
+            const sig = HEC_DATA_SIGNATURE;
+            const storedSig = localStorage.getItem('hec_published_sig');
             const stored = localStorage.getItem('hec_dashboard_data_v7');
-            if (stored) {
+            // Use this browser's saved copy ONLY if it belongs to the same published data
+            // as this file. If the file was re-deployed with different data (or this is a
+            // first visit / old cache without a signature), adopt the file's data so the
+            // newly published numbers always win over a stale cache.
+            if (stored && storedSig === sig) {
                 try { return JSON.parse(stored); } catch (e) { /* fall through */ }
             }
-            const legacy = localStorage.getItem('hec_dashboard_data');
-            if (legacy) {
-                try {
-                    const old = JSON.parse(legacy);
-                    if (old[0] && old[0].ccpi && !old[0].ccpi_res) {
-                        return old.map(row => ({
-                            date: row.date,
-                            ccpi_res: row.ccpi, ccpi_nonres: row.ccpi * 0.98, cpi: row.cpi,
-                            gdp_deflator: row.cpi * 0.95, rebar: 860000, remicon: 80000,
-                            copper: row.copper || 8500, aluminum: 2400,
-                            basic_above: row.basic || 2105000, basic_below: (row.basic || 2105000) * 0.78,
-                            standard_cost: row.standard || 1980000, standard_labor: 160000,
-                            oil_brent: (row.oil || 80) * 1.03, oil_dubai: row.oil || 80,
-                            fx_usd: 1385, fx_eur: 1505
-                        }));
-                    }
-                } catch (e) { /* fall through */ }
-            }
-            return defaultRawData;
+            try {
+                localStorage.setItem('hec_dashboard_data_v7', JSON.stringify(defaultRawData));
+                localStorage.setItem('hec_published_sig', sig);
+                localStorage.removeItem('hec_dashboard_last_revision');
+            } catch (e) { /* private mode / quota: ignore */ }
+            return defaultRawData.slice();
         }
 
         let rawData = loadRawData();
