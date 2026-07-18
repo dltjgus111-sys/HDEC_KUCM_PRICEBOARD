@@ -3,7 +3,11 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#efefed">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
@@ -13,8 +17,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;900&display=swap"
         rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.460.0"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
@@ -36,15 +40,29 @@
             --brown: #5A3A00;
             --line: rgba(0, 0, 0, .08);
             --shadow: 0 18px 46px rgba(0, 0, 0, .12);
-            --content: min(1360px, calc(100vw - 56px));
+            --content: min(1360px, calc(100% - 56px));
+            --page-pad: 28px;
+            --safe-b: env(safe-area-inset-bottom, 0px);
+            --safe-t: env(safe-area-inset-top, 0px);
         }
 
         * {
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html {
+            width: 100%;
+            overflow-x: hidden;
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
         }
 
         body {
             margin: 0;
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
             color: var(--text);
             background-color: var(--bg);
             background-image:
@@ -55,6 +73,8 @@
             -webkit-font-smoothing: antialiased;
             word-break: keep-all;
             min-height: 100vh;
+            min-height: 100dvh;
+            padding-bottom: var(--safe-b);
         }
 
         .hidden {
@@ -106,6 +126,8 @@
             width: var(--content);
             max-width: 100%;
             margin: 14px auto 0;
+            padding-left: 0;
+            padding-right: 0;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -230,7 +252,8 @@
 
         @media (max-width: 900px) {
             :root {
-                --content: 100vw;
+                --content: 100%;
+                --page-pad: 12px;
             }
 
             .category-row {
@@ -242,30 +265,39 @@
             }
 
             .chart-select-group {
-                grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-            }
-
-            /* Landscape (horizontal) mode adjustments */
-            @media (max-width: 900px) and (orientation: landscape) {
-                .category-row {
-                    grid-template-columns: repeat(2, minmax(0, 1fr));
-                }
-
-                .category-label {
-                    grid-column: span 2;
-                }
-
-                .chart-select-group {
-                    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-                }
-
-                .chart-select-group .group-label {
-                    grid-column: span 4;
-                }
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
             }
 
             .chart-select-group .group-label {
                 grid-column: 1 / -1;
+            }
+        }
+
+        @media (max-width: 900px) and (orientation: landscape) {
+            .category-row {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .category-label {
+                grid-column: span 2;
+            }
+
+            .chart-select-group {
+                grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            }
+
+            .chart-select-group .group-label {
+                grid-column: 1 / -1;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .category-row {
+                grid-template-columns: 1fr;
+            }
+
+            .chart-select-group {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
             }
         }
 
@@ -1705,24 +1737,227 @@
                 top: 0;
                 margin-top: 0;
                 border-radius: 0;
-                padding-top: 8px;
-                padding-bottom: 8px;
-                background: rgba(255, 255, 255, 0.95);
+                padding: calc(8px + var(--safe-t)) var(--page-pad) 8px;
+                width: 100%;
+                max-width: 100%;
+                background: rgba(255, 255, 255, 0.96);
+                gap: 8px;
             }
 
             .brand-chip {
                 width: 100%;
-                justify-content: center;
+                justify-content: flex-start;
+                border-radius: 14px;
+                padding: 10px 12px;
+                gap: 8px;
             }
 
-            .tab-btn {
-                padding: 6px 8px !important;
-                font-size: 13px !important;
+            .brand-chip strong {
+                font-size: 13px;
+                line-height: 1.35;
+                white-space: normal;
             }
 
             .tab-bar {
-                margin-top: 6px;
+                width: auto;
+                max-width: 100%;
+                margin: 8px var(--page-pad) 0;
                 padding: 4px;
+                border-radius: 14px;
+                gap: 4px;
+            }
+
+            .tab-btn {
+                padding: 10px 6px !important;
+                font-size: 12px !important;
+                line-height: 1.25;
+                min-height: 44px;
+                border-radius: 12px;
+            }
+
+            .page-shell {
+                width: 100%;
+                max-width: 100%;
+                padding: 14px var(--page-pad) calc(28px + var(--safe-b));
+            }
+
+            .panel {
+                border-radius: 14px;
+            }
+
+            .panel.p-6,
+            .chart-panel.p-6 {
+                padding: 14px !important;
+            }
+
+            .simulator-panel {
+                padding: 16px;
+                border-radius: 14px;
+            }
+
+            .dashboard-section-head {
+                align-items: stretch;
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .view-month-bar {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .view-month-bar select,
+            .chart-base-select select,
+            .simulator-panel select,
+            .simulator-panel input,
+            #upload-date,
+            input[type="month"],
+            input[type="text"],
+            input[type="number"],
+            select {
+                font-size: 16px !important;
+                min-height: 44px;
+            }
+
+            .chart-base-select {
+                flex: 1 1 auto;
+                justify-content: space-between;
+                width: 100%;
+            }
+
+            .chart-base-select select {
+                max-width: none;
+                flex: 1;
+            }
+
+            .chart-controls {
+                width: 100%;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+
+            .chart-btn {
+                min-height: 44px;
+                font-size: 11px;
+                padding: 8px 6px;
+            }
+
+            .chart-canvas-area {
+                min-height: 240px;
+                height: 240px;
+            }
+
+            .sim-results-grid {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+
+            .sim-compare-block + .sim-compare-block {
+                border-left: none;
+                border-top: 1px solid rgba(255, 255, 255, .2);
+                padding-top: 8px;
+            }
+
+            .sim-compare-block.sim-compare-avg {
+                padding: 10px 8px;
+            }
+
+            .sim-compare-name {
+                font-size: 11px;
+                min-height: auto;
+            }
+
+            .sim-compare-rate {
+                font-size: 20px;
+            }
+
+            .sim-compare-cost {
+                font-size: 13px;
+            }
+
+            .meta-chip,
+            .nav-chip {
+                padding: 10px 12px;
+                font-size: 12px;
+                min-height: 44px;
+            }
+
+            .indicator-modal {
+                padding: 10px;
+                align-items: flex-end;
+            }
+
+            .indicator-modal-panel {
+                width: 100%;
+                max-height: min(88dvh, 720px);
+                border-radius: 18px 18px 0 0;
+            }
+
+            .indicator-card {
+                min-height: 64px;
+                padding: 12px;
+            }
+
+            .indicator-card .card-val {
+                font-size: 16px;
+            }
+
+            .indicator-card .card-changes {
+                font-size: 10px;
+            }
+
+            .data-table-wrap {
+                -webkit-overflow-scrolling: touch;
+                max-height: min(60dvh, 420px);
+            }
+
+            .footer-sources {
+                white-space: normal;
+            }
+
+            .footer-source-block {
+                white-space: normal;
+                display: inline-block;
+                margin-bottom: 4px;
+            }
+
+            footer {
+                padding-left: var(--page-pad);
+                padding-right: var(--page-pad);
+                padding-bottom: calc(16px + var(--safe-b));
+            }
+
+            .login-card {
+                margin: 0 12px;
+                padding: 24px 18px !important;
+            }
+
+            .btn-primary {
+                min-height: 48px;
+                font-size: 16px;
+            }
+
+            .upload-toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .btn-data {
+                min-height: 44px;
+                font-size: 13px;
+                padding: 10px 14px;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .tab-btn {
+                font-size: 11px !important;
+                padding: 8px 4px !important;
+            }
+
+            .brand-chip .badge {
+                display: none;
             }
         }
     </style>
@@ -1746,7 +1981,7 @@
     <div id="main-content" class="flex-1 flex flex-col">
 
         <!-- Top Bar -->
-        <div class="topbar px-1 md:px-4">
+        <div class="topbar">
             <div class="brand-chip">
                 <span class="badge">현대건설</span>
                 <strong>주요 물가지표 통합 모니터링 대시보드</strong>
@@ -1758,19 +1993,19 @@
                 </span>
                 <button id="admin-toggle-btn" onclick="toggleAdminMode()" class="nav-chip admin">
                     <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
-                    <span id="admin-btn-text">관리자 로그인</span>
+                    <span id="admin-btn-text" class="admin-btn-label">관리자 로그인</span>
                 </button>
             </div>
         </div>
 
         <!-- Tab Bar -->
-        <div class="tab-bar px-1 md:px-4">
+        <div class="tab-bar">
             <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn active">대시보드</button>
-            <button onclick="switchTab('guide')" id="tab-guide" class="tab-btn">지표별 설명 가이드</button>
+            <button onclick="switchTab('guide')" id="tab-guide" class="tab-btn">지표 가이드</button>
             <button onclick="switchTab('data')" id="tab-data" class="tab-btn">데이터관리</button>
         </div>
 
-        <main class="page-shell px-1 md:px-4 space-y-6 flex-1">
+        <main class="page-shell space-y-6 flex-1">
 
             <!-- Dashboard Tab -->
             <div id="content-dashboard" class="space-y-6">
@@ -2078,7 +2313,7 @@
 
     <script>
 window.addEventListener('error', function(e) {
-    alert('JS Error: ' + e.message + '\nLine: ' + e.lineno + '\nCol: ' + e.colno);
+    try { console.error('JS Error:', e.message, e.lineno, e.colno); } catch (_) {}
 });
 </script>
 <script>
@@ -3258,15 +3493,31 @@ window.addEventListener('error', function(e) {
             return `<span class="${cls}">${label} ${sign}${pct}%</span>`;
         }
 
+        function safeCreateIcons() {
+            try {
+                if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+            } catch (err) {
+                console.warn('lucide icons skipped', err);
+            }
+        }
+
         window.onload = function () {
-            lucide.createIcons();
+            safeCreateIcons();
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') closeIndicatorHistory();
             });
             document.getElementById('login-gate').style.display = 'none';
             document.getElementById('main-content').style.display = 'flex';
             initDashboard();
+            window.addEventListener('resize', onMobileViewportChange);
+            window.addEventListener('orientationchange', () => setTimeout(onMobileViewportChange, 180));
         };
+
+        function onMobileViewportChange() {
+            if (chartInstance) {
+                try { chartInstance.resize(); } catch (_) {}
+            }
+        }
 
         function checkGatePassword() {
             sessionStorage.setItem('hec_authenticated', 'true');
@@ -3311,7 +3562,7 @@ window.addEventListener('error', function(e) {
             renderTrendsChart();
             renderGuidePage();
             renderFooterSources();
-            lucide.createIcons();
+            safeCreateIcons();
         }
 
         function renderFooterSources() {
@@ -3680,7 +3931,7 @@ window.addEventListener('error', function(e) {
             if (currentRow) {
                 requestAnimationFrame(() => currentRow.scrollIntoView({ block: 'center' }));
             }
-            lucide.createIcons();
+            safeCreateIcons();
         }
 
         function closeIndicatorHistory() {
@@ -4336,8 +4587,14 @@ window.addEventListener('error', function(e) {
             document.getElementById(`content-${tabId}`).classList.remove('hidden');
             if (tabId === 'data') {
                 renderDataMgmtTable();
-                lucide.createIcons();
+                safeCreateIcons();
             }
+        }
+
+        function adminBtnLabel(loggedIn) {
+            const narrow = window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
+            if (loggedIn) return narrow ? '로그아웃' : '관리자 로그아웃';
+            return narrow ? '관리자' : '관리자 로그인';
         }
 
         function toggleAdminMode() {
@@ -4345,7 +4602,7 @@ window.addEventListener('error', function(e) {
                 const check = prompt('관리자 인증 비밀번호를 입력하십시오.');
                 if (check === 'admin1234') {
                     isAdminMode = true;
-                    document.getElementById('admin-btn-text').innerText = '관리자 로그아웃';
+                    document.getElementById('admin-btn-text').innerText = adminBtnLabel(true);
                     renderPageMeta();
                     renderDataMgmtMeta();
                     applyDataAdminVisibility();
@@ -4356,7 +4613,7 @@ window.addEventListener('error', function(e) {
                 }
             } else {
                 isAdminMode = false;
-                document.getElementById('admin-btn-text').innerText = '관리자 로그인';
+                document.getElementById('admin-btn-text').innerText = adminBtnLabel(false);
                 renderPageMeta();
                 renderDataMgmtMeta();
                 applyDataAdminVisibility();
