@@ -171,7 +171,7 @@ input[type=range]{width:100%; accent-color:var(--acc)}
         <button class="opt preset" id="p60" style="background:var(--acc);color:#08130c;font-weight:700">⚡ 60점 벼락치기</button>
         <button class="opt preset" id="pAll">전체 정독</button>
       </div>
-      <p class="hint" style="margin-top:6px">60점 벼락치기 = 빈출 <b>★★★ 이상</b> + <b>요점만</b> + 핵심어 빈칸. 하룻밤에 도는 걸 목표로 한 조합입니다.</p>
+      <p class="hint" style="margin-top:6px">60점 벼락치기 = 빈출 <b>★★★ 이상</b> + <b>요점만</b> + <b>시험에 적을 답만</b> 빈칸. 하룻밤에 도는 걸 목표로 한 조합입니다.</p>
     </div>
     <div class="grp">
       <label>답안 분량</label>
@@ -208,10 +208,11 @@ input[type=range]{width:100%; accent-color:var(--acc)}
     <div class="grp">
       <label>보기 방식</label>
       <div class="opts" data-k="mode">
-        <button class="opt" data-v="blank">핵심어 빈칸</button>
+        <button class="opt" data-v="blank">적을 답만 빈칸</button>
         <button class="opt" data-v="step">한 줄씩 공개</button>
         <button class="opt" data-v="open">바로 다 보기</button>
       </div>
+      <p class="hint">「쓰시오」는 답 한 줄을 통째로 가리고, 「채우시오」는 숫자·핵심값만 빈칸으로 둡니다.</p>
     </div>
     <div class="grp">
       <label>필터</label>
@@ -254,10 +255,17 @@ const DATA = {"cards":[{"id":"필답형-001-1","no":"001","src":"필답형","y":
 const CARDS = DATA.cards, IMGS = DATA.imgs;
 
 /* ── 저장 ── */
-const LSK = 'gsa_cram_v1';
+const LSK = 'gsa_cram_v2';
 let store = {mark:{}, seen:{}, idx:0,
   cfg:{src:'all',star:'3',sort:'freq',mode:'blank',only:'all',cat:'all',q:'',spd:30,full:'n'}};
-try{ const s = JSON.parse(localStorage.getItem(LSK)); if(s) store = Object.assign(store, s); }catch(e){}
+try{
+  const s = JSON.parse(localStorage.getItem(LSK) || localStorage.getItem('gsa_cram_v1'));
+  if(s){
+    store = Object.assign(store, s);
+    store.cfg = Object.assign({src:'all',star:'3',sort:'freq',mode:'blank',only:'all',cat:'all',q:'',spd:30,full:'n'}, s.cfg || {});
+    store.cfg.mode = store.cfg.mode || 'blank';
+  }
+}catch(e){}
 const save = () => { try{ localStorage.setItem(LSK, JSON.stringify(store)); }catch(e){} };
 
 /* ── 별점 = 출제 횟수 ── */
@@ -287,23 +295,72 @@ function buildDeck(keepId){
 
 /* ── 빈칸 처리 ── */
 const esc = s => s.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
-/* 빌드 시 〖 〗로 표시해 둔 핵심어/구를 빈칸으로 렌더 */
-function blankify(s){
-  return s.split(/〖|〗/).map((part, i) =>
-    i % 2 ? `<span class="blank" data-t="${esc(part)}">${esc(part)}</span>` : esc(part)
-  ).join('');
+
+/* 질문 유형: 쓰시오(답 통째로 적음) vs 채우시오(괄호 값만 적음) */
+function qText(c){ return (c.q || []).join(' '); }
+function isWriteCard(c){
+  const q = qText(c);
+  return !!(c.need) || /쓰시오|기술하시오|설명하시오|서술하시오|기입하시오|열거|나열|적어|작성하시오/.test(q);
 }
-const hasBlank = c => (c.ac || []).some(t => t.includes('〖'));
+function isFillCard(c){
+  const q = qText(c);
+  return /채우시오|\(\s*\)|\( \)|괄호/.test(q);
+}
+
+/* 시험 괄호에 실제로 적을 값만 빈칸: 숫자·단위 우선, 짧은 핵심 명사 */
+function keepBlankTerm(term){
+  const t = String(term || '').trim();
+  if(!t) return false;
+  if(/\d/.test(t)) return true;                 // 90cm, 2m, 70% …
+  if(/[㎡％%]/.test(t) && t.length <= 6) return true;
+  if(t.length < 2 || t.length > 8) return false;
+  if(/\s/.test(t)) return false;               // 여러 단어 구는 괄호 답이 아님
+  // 조사·용언 조각 제외
+  if(/[은는을를이가의과와도만]$/.test(t)) return false;
+  if(/(으로|로|로부터|으로부터|에서의|하여|하도록|도록|거나|되지|되는|있는|없는|이다|있다|한다|할것|하면|되면|으면|어야|이을|일)$/.test(t)) return false;
+  if(/(지|어|여|게|니|며)$/.test(t) && t.length <= 5) return false; // 꼬인, 걸어야 등
+  if(/^(그|및|또는|등|경우|때|후|전|간격|폭|경사|계단|바닥면|추락|당일|체결|수평|사업주|공정율|현상파악|본질추구|대책수립|목표설정|재료일|호의)$/.test(t)) return false;
+  return true;                                  // 발끝막이판, 안전난간, 경암, 난간기둥 …
+}
+
+function blankify(s){
+  return String(s || '').split(/〖|〗/).map((part, i) => {
+    if(i % 2 === 0) return esc(part);
+    if(!keepBlankTerm(part)) return esc(part); // 과한 표시는 일반 텍스트로
+    return `<span class="blank" data-t="${esc(part)}">${esc(part)}</span>`;
+  }).join('');
+}
+function usefulBlankCount(c){
+  let n = 0;
+  for(const t of (c.ac || [])){
+    const parts = String(t || '').split(/〖|〗/);
+    for(let i = 1; i < parts.length; i += 2){
+      if(keepBlankTerm(parts[i])) n++;
+    }
+  }
+  return n;
+}
+const hasBlank = c => usefulBlankCount(c) > 0;
+
 /* 60점 전략: '요점만' 이면 외울 가치 높은 항목만, '전체' 면 교재 그대로 */
 function shownIdx(c){
   if(store.cfg.full === 'y' || !c.keep) return c.a.map((_, i) => i);
   return c.keep;
 }
-/* 빈칸이 하나도 없는 카드는 '한 줄씩'으로 자동 전환 */
+
+/*
+ * blank 모드 동작:
+ * - 쓰시오형: 시험에 적을 답(한 줄) 전체를 가림
+ * - 채우시오형: 괄호에 들어갈 숫자·핵심값만 빈칸
+ * - 그 외/빈칸 없으면 한 줄씩 공개
+ */
 function effMode(c){
   const m = store.cfg.mode;
   if(m !== 'blank') return m;
-  return hasBlank(c) ? 'blank' : 'step';
+  if(isWriteCard(c)) return 'step';          // 답 통째로 가리기
+  if(isFillCard(c) && hasBlank(c)) return 'blank';
+  if(hasBlank(c)) return 'blank';
+  return 'step';
 }
 
 /* ── 렌더 ── */
@@ -348,7 +405,15 @@ function render(){
     const li = i => {
       const t = c.a[i];
       if(mode === 'step') return `<li class="hide" data-i="${i}">${esc(t)}</li>`;
-      if(mode === 'blank') return `<li class="show">${blankify(c.ac[i] || t)}</li>`;
+      if(mode === 'blank'){
+        const src = c.ac[i] || t;
+        const html = blankify(src);
+        // 이 줄에 남길 빈칸이 없으면 답 전체를 가림 (적을 내용 자체)
+        if(!html.includes('class="blank"')){
+          return `<li class="hide" data-i="${i}">${esc(t)}</li>`;
+        }
+        return `<li class="show">${html}</li>`;
+      }
       return `<li class="show">${esc(t)}</li>`;
     };
     ahtml += `<ul class="ans">` + idx.map(li).join('') + `</ul>`;
